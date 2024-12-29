@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -10,6 +11,10 @@
 #ifdef _WIN64
 #include <windows.h>
 #include <Winbase.h>
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
 
 #include "grandPrix.h"
@@ -42,7 +47,7 @@ void printHelp(void) {
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int getLapTime(EventType type) {
-  return 25000 + (rand() * rand()) % 21000;
+  return 25000 + (unsigned int)((rand() * rand())) % 20001;
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -125,7 +130,7 @@ int connectServer(ProgramOptions *pOptions, ClientContext *pClientCtx) {
     return RETURN_KO;
   }
 
-  code = connect(pClientCtx->clientSocket, (SOCKADDR *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr));
+  code = connect(pClientCtx->clientSocket, (struct sockaddr *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr));
   if (code == SOCKET_ERROR) {
     printf("ERROR; unable to connect to server, code=%d\n", WSAGetLastError());
     return RETURN_KO;
@@ -171,7 +176,7 @@ int genTimeCore(ProgramOptions *pParms) {
   maxEvents = cars * (5 * pParms->laps + 2);
   pEvents = (EventRace *)calloc(maxEvents, sizeof(EventRace));
   if (pEvents == NULL) {
-    printf("ERROR: unable to allocate %llu bytes for events\n", sizeof(EventRace) * maxEvents);
+    printf("ERROR: unable to allocate %lu bytes for events\n", (u_long)(sizeof(EventRace) * maxEvents));
     return RETURN_KO;
   }
 
@@ -247,7 +252,7 @@ int genTimeCore(ProgramOptions *pParms) {
   sleep = 0;
   pEvent = pEvents;
   for (i = 0; i < events; i++) {
-    Sleep(pEvent->timestamp - sleep);
+    usleep((pEvent->timestamp - sleep) * 1000);
     sleep = pEvent->timestamp;
 
     code = sendEvent(&clientCtx, pEvent);

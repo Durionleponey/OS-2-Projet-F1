@@ -7,8 +7,14 @@ set(GCC_ENABLE_WARNINGS "-Wall -Wuninitialized -Wreturn-type -Wstrict-prototypes
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_ENABLE_WARNINGS}")
 
 
-link_libraries(ws2_32)
-link_libraries(ncursesw)
+if(CMAKE_SYSTEM MATCHES Windows)
+  link_libraries(ws2_32)
+  link_libraries(ncursesw)
+endif()
+if(CMAKE_HOST_SYSTEM MATCHES Linux)
+  link_libraries(ncurses)
+endif()
+
 link_libraries(pthread)
 
 add_executable(genTime

@@ -2,6 +2,7 @@
 #define GRAND_PRIX_H
 
 #include <stdint.h>
+#include <errno.h>
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
@@ -12,6 +13,13 @@
 
 #ifdef _WIN64
 #define socket_t SOCKET
+#define socklen_t int
+#else
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
+typedef int socket_t;
+#define closesocket(x) close(x)
+#define WSAGetLastError() errno
 #endif
 
 /*--------------------------------------------------------------------------------------------------------------------*/

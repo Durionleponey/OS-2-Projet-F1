@@ -3,16 +3,18 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <time.h>
 #include <assert.h>
-#include <ncurses/curses.h>
 
 #ifdef _WIN64
 #include <winsock2.h>
+#include <ncurses/curses.h>
 #else
+#include <ncurses.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -137,9 +139,11 @@ int startListening(ProgramOptions *pOptions, Listener *pListener) {
 int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
   socket_t clientSocket;
   char pAddrString[64];
-  int addressSize;
+  socklen_t addressSize;
+#ifdef _WIN64
   DWORD stringSize;
   int code;
+#endif
 
   while (true) {
     addressSize = sizeof(pClientCtx->clientAddr);
@@ -159,12 +163,17 @@ int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
 #endif
   }
 
+#ifdef _WIN64
   stringSize = sizeof(pAddrString);
-  code = WSAAddressToString((SOCKADDR *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr), NULL, pAddrString,
-                            &stringSize);
+  code = WSAAddressToString((struct sockaddr *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr), NULL,
+                            pAddrString, &stringSize);
   if (code == 0) {
     printf("INFO: connection from %s accepted\n", pAddrString);
   }
+#else
+  inet_ntop(AF_INET, &pClientCtx->clientAddr.sin_addr, pAddrString, sizeof(pAddrString));
+//  printf("INFO: connection from %s accepted\n", pAddrString);
+#endif
 
   pClientCtx->clientSocket = clientSocket;
 
