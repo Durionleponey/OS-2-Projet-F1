@@ -10,10 +10,12 @@
 #include <time.h>
 #include <assert.h>
 
-#ifdef _WIN64
+#ifdef WIN64
 #include <winsock2.h>
 #include <ncurses/curses.h>
-#else
+#endif
+
+#ifdef LINUX
 #include <ncurses.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -140,7 +142,7 @@ int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
   socket_t clientSocket;
   char pAddrString[64];
   socklen_t addressSize;
-#ifdef _WIN64
+#ifdef WIN64
   DWORD stringSize;
   int code;
 #endif
@@ -151,7 +153,7 @@ int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
     if (clientSocket != INVALID_SOCKET) {
       break;
     }
-#ifdef _WIN64
+#ifdef WIN64
     printf("ERROR: unable to accept new incoming connection, code=%d\n", WSAGetLastError());
     return RETURN_KO;
 #endif
@@ -163,14 +165,15 @@ int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
 #endif
   }
 
-#ifdef _WIN64
+#ifdef WIN64
   stringSize = sizeof(pAddrString);
   code = WSAAddressToString((struct sockaddr *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr), NULL,
                             pAddrString, &stringSize);
   if (code == 0) {
     printf("INFO: connection from %s accepted\n", pAddrString);
   }
-#else
+#endif
+#ifdef LINUX
   inet_ntop(AF_INET, &pClientCtx->clientAddr.sin_addr, pAddrString, sizeof(pAddrString));
 //  printf("INFO: connection from %s accepted\n", pAddrString);
 #endif
@@ -197,7 +200,7 @@ int readFully(socket_t socket, void *pBuffer, int size) {
     } else if (code == 0) {
       return 0;
     } else {
-#ifdef _WIN64
+#ifdef WIN64
       if (WSAGetLastError() == WSAECONNRESET) {
         return 0;
       }
@@ -208,57 +211,6 @@ int readFully(socket_t socket, void *pBuffer, int size) {
   }
 
   return bytesRead;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-char *timestampToHour(uint32_t timeMs, char *pOutput, int size) {
-  int milli;
-  int second;
-  int minute;
-  int hour;
-
-  milli = timeMs % 1000;
-  timeMs /= 1000;
-  second = timeMs % 60;
-  timeMs /= 60;
-  minute = timeMs % 60;
-  hour = timeMs / 60;
-
-  snprintf(pOutput, size, "%d:%02d:%02d.%03d", hour, minute, second, milli);
-
-  return pOutput;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-char *timestampToMinute(uint32_t timeMs, char *pOutput, int size) {
-  int milli;
-  int second;
-  int minute;
-
-  milli = timeMs % 1000;
-  timeMs /= 1000;
-  second = timeMs % 60;
-  minute = timeMs / 60;
-
-  snprintf(pOutput, size, "%d:%02d.%03d", minute, second, milli);
-
-  return pOutput;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-char *timestampToSeconds(uint32_t timeMs, char *pOutput, int size) {
-  int milli;
-  int second;
-
-  milli = timeMs % 1000;
-  second = timeMs / 1000;
-
-  snprintf(pOutput, size, "%d.%03d", second, milli);
-
-  return pOutput;
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -345,7 +297,7 @@ int displayLeaderBoard(WINDOW *pWindow, LeaderBoard *pLeaderBoard) {
 int processEvent(AcquireThreadCtx *pCtx, EventRace *pEvent) {
   CarStatus *pCar;
 
-  assert(pEvent->car >= 0 && pEvent->car < MAX_CARS);
+  assert(pEvent->car >= 0 && pEvent->car < MAX_DRIVERS);
 
   pCar = &pCtx->pCarStatus[pEvent->car];
   if (pCar->active == false) {
@@ -438,7 +390,7 @@ acquireDataException:
 int displayResultCore(ProgramOptions *pOptions) {
   AcquireThreadCtx acquireThreadCtx;
   Listener listener;
-  CarStatus pCarStatus[MAX_CARS];
+  CarStatus pCarStatus[MAX_DRIVERS];
   LeaderBoard leaderBoard;
   WINDOW *pLeaderWindow;
   SortCarStatus *pSortCars;
@@ -447,7 +399,7 @@ int displayResultCore(ProgramOptions *pOptions) {
   int code;
   int i;
 
-#ifdef _WIN64
+#ifdef WIN64
   WSADATA info;
 
   if (WSAStartup(MAKEWORD(1, 1), &info) != 0) {
@@ -456,7 +408,7 @@ int displayResultCore(ProgramOptions *pOptions) {
   }
 #endif
 
-  pSortCars = (SortCarStatus *)malloc(sizeof(SortCarStatus) * MAX_CARS);
+  pSortCars = (SortCarStatus *)malloc(sizeof(SortCarStatus) * MAX_DRIVERS);
   if (pSortCars == NULL) {
     printf("ERROR: unable to allocate memory to sort cars\n");
     returnCode = RETURN_KO;
@@ -464,7 +416,7 @@ int displayResultCore(ProgramOptions *pOptions) {
   }
 
   memset(pCarStatus, 0, sizeof(pCarStatus));
-  for (i = 0; i < MAX_CARS; i++) {
+  for (i = 0; i < MAX_DRIVERS; i++) {
     sprintf(pCarStatus[i].pName, "CAR #%02d", i);
     pCarStatus[i].active = true;
   }
@@ -492,7 +444,7 @@ int displayResultCore(ProgramOptions *pOptions) {
   leaderBoard.lastEventTimestamp = 0;
   leaderBoard.raceStartTime = 0;
   leaderBoard.pSortIndices = pSortCars;
-  for (i = 0; i < MAX_CARS; i++) {
+  for (i = 0; i < MAX_DRIVERS; i++) {
     pSortCars[i].indice = i;
     pSortCars[i].pCarStatus = &pCarStatus[i];
   }
@@ -528,7 +480,7 @@ displayResultCoreExit1:
   free((void *)pSortCars);
 
 displayResultCoreExit:
-#ifdef _WIN64
+#ifdef WIN64
   WSACleanup();
 #endif
   return returnCode;

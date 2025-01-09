@@ -1,8 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-set CPPDIR=c:/Users/DP69SA/cpp
-set JAVADIR=c:/Users/DP69SA/java
+set CPPDIR=c:/cpp
 set WORKSPACE=%CPPDIR%/workspace
 
 set LIBYAML_PATH=%WORKSPACE%/yaml-0.2.5
@@ -11,8 +10,7 @@ set DMALLOC_PATH=%WORKSPACE%/dmalloc-5.6.5
 call :appendPath %CPPDIR%/msys64/ucrt64/bin
 call :appendPath %CPPDIR%/msys64/usr/bin
 call :appendPath %JAVADIR%/git/bin
-call :appendPath %ORACLE_HOME%/bin
-call :appendPath %CPPDIR%/VSCode-1.96.2
+call :appendPath %CPPDIR%/VSCode
 
 
 rem ./dmalloc -f dmallocrc -l ./dmalloc.log -i 100 log

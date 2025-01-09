@@ -6,21 +6,47 @@ set(CMAKE_C_STANDARD 11)
 set(GCC_ENABLE_WARNINGS "-Wall -Wuninitialized -Wreturn-type -Wstrict-prototypes -Wwrite-strings -Wwrite-strings")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GCC_ENABLE_WARNINGS}")
 
+include_directories(include)
 
 if(CMAKE_SYSTEM MATCHES Windows)
+  message(STATUS "Target system is Windows")
+
+  add_compile_definitions(WIN64)
+
   link_libraries(ws2_32)
   link_libraries(ncursesw)
 endif()
+
 if(CMAKE_HOST_SYSTEM MATCHES Linux)
+  message(STATUS "Build host runs Linux")
+
+  add_compile_definitions(LINUX)
+
   link_libraries(ncurses)
 endif()
 
 link_libraries(pthread)
 
 add_executable(genTime
-        genTime.c grandPrix.h
-        util.c util.h)
+        genTime.c include/grandPrix.h
+        util.c include/util.h)
 
 add_executable(displayResult
-        displayResult.c grandPrix.h
-        util.c util.h)
+        displayResult.c include/grandPrix.h
+        csvParser.c include/csvParser.h
+        util.c include/util.h)
+
+add_executable(testCsvParser
+        testCsvParser.c
+        csvParser.c include/csvParser.h)
+
+add_executable(testFile
+        testFile.c include/grandPrix.h include/util.h)
+
+add_executable(testMenu
+        testMenu.c)
+
+add_executable(grandPrix
+        grandPrix.c include/grandPrix.h include/util.h
+        csvParser.c include/csvParser.h
+        util.c include/util.h)

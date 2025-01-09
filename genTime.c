@@ -8,7 +8,7 @@
 #include <getopt.h>
 #include <time.h>
 
-#ifdef _WIN64
+#ifdef WIN64
 #include <windows.h>
 #include <Winbase.h>
 #else
@@ -107,7 +107,7 @@ int connectServer(ProgramOptions *pOptions, ClientContext *pClientCtx) {
 
   pClientCtx->clientSocket = INVALID_SOCKET;
 
-#ifdef _WIN64
+#ifdef WIN64
   WSADATA info;
 
   if (WSAStartup(MAKEWORD(2, 2), &info) != 0) {
@@ -146,7 +146,7 @@ int disconnectServer(ClientContext *pClientCtx) {
     closesocket(pClientCtx->clientSocket);
   }
 
-#ifdef _WIN64
+#ifdef WIN64
   WSACleanup();
 #endif
 

@@ -1,6 +1,18 @@
 
 
+# On Windows with MSys64:
 
+To compile the application under Windows (10+), install msys64. By default msys64 uses ucrt64 tool chain.
+Install new packages using pacman tool (pacman -S [package name])
+
+```
+ucrt64/mingw-w64-ucrt-x86_64-toolchain
+ucrt64/mingw-w64-ucrt-x86_64-cmake
+ucrt64/mingw-w64-ucrt-x86_64-ncurses
+```
+
+
+# On Raspberry PI:
 
 
 sudo apt-get install libncurses5-dev libncursesw5-dev
@@ -12,12 +24,12 @@ pi@raspberrypi:~/grandPrix/build $ make
 
 
 
-To run the application:
+# To run the application:
 
-Server side:
+## Server side:
 UCRT64 /c/Users/DP69SA/cpp/workspace/grandPrix/build
 $ ./displayResult -p 1111
 
-Client side:
+## Client side:
 UCRT64 /c/Users/DP69SA/cpp/workspace/grandPrix/build
 $ ./genTime -c 10 -t GP -s 127.0.0.1 -p 1111 -l 2
