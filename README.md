@@ -120,10 +120,10 @@ Les contributions sont les bienvenues. Pour signaler un bug ou proposer une fonc
 
 ## Auteurs
 
-- Nom 1
-- Nom 2
-- Nom 3
-- Nom 4
+- Nathan Colson 
+- Nathan Brico
+- Clarembaux Robin
+- Jones Cyan
 
 ## Licence
 
