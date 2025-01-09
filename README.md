@@ -120,8 +120,8 @@ Les contributions sont les bienvenues. Pour signaler un bug ou proposer une fonc
 
 ## Auteurs
 
-- Nathan Colson 
-- Nathan Brico
+- Colson Nathan
+- Brico Nathan
 - Clarembaux Robin
 - Jones Cyan
 
