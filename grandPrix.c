@@ -613,6 +613,7 @@ int displayQualification(Context *pCtx, int grandPrixId, Race *pQualification) {
 
   ppFields = pCtx->ppCsvGrandPrix[grandPrixId]->ppFields;
   pWindow = pCtx->pWindow;
+  previousTime = 0;
 
   werase(pWindow);
   if (pQualification->type == race_ERROR) {
@@ -674,6 +675,7 @@ int displayPractice(Context *pCtx, int grandPrixId, Race *pPractice) {
 
   ppFields = pCtx->ppCsvGrandPrix[grandPrixId]->ppFields;
   pWindow = pCtx->pWindow;
+  previousTime = 0;
 
   werase(pWindow);
   if (pPractice->type == race_ERROR) {
@@ -921,9 +923,9 @@ int displayMenu(Context *pCtx, MenuItem *pMenu, bool back, int position, void *p
         wattron(pMenuWin, A_REVERSE);
       }
       if (back && i == menuItems - 1) {
-        mvwprintw(pMenuWin, i + 1, 3, pBackMessage);
+        mvwprintw(pMenuWin, i + 1, 3, "%s", pBackMessage);
       } else {
-        mvwprintw(pMenuWin, i + 1, 3, pMenu[i].pItem);
+        mvwprintw(pMenuWin, i + 1, 3, "%s", pMenu[i].pItem);
       }
       if (i == currentChoice) {
         wattroff(pMenuWin, A_REVERSE);
@@ -1467,10 +1469,10 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
   getmaxyx(pWindow, maxY, maxX);
 
   pMessage = "En attente de connexion des postes S1, S2 et S3...";
-  mvwprintw(pWindow, maxY / 2, (maxX - strlen(pMessage)) / 2, pMessage);
+  mvwprintw(pWindow, maxY / 2, (maxX - strlen(pMessage)) / 2, "%s", pMessage);
   sprintf(pLastGrandPrix, "La prochaine etape est: %s - %s", pCtx->ppCsvGrandPrix[pCtx->currentGP]->ppFields[0],
           raceTypeToString(leaderBoard.type));
-  mvwprintw(pWindow, maxY / 2 - 1, (maxX - strlen(pLastGrandPrix)) / 2, pLastGrandPrix);
+  mvwprintw(pWindow, maxY / 2 - 1, (maxX - strlen(pLastGrandPrix)) / 2, "%s", pLastGrandPrix);
   wrefresh(pWindow);
 
 #ifdef LINUX
@@ -1480,6 +1482,7 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
     code = fork();
     if (code == -1) {
       logger(log_ERROR, "unable to create a new process, errno=%d\n", errno);
+      returnCode = RETURN_KO;
       goto captureEventsExit;
     }
     if (code == 0) {
