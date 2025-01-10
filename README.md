@@ -1,30 +1,54 @@
+# Linus et MACos
+
+(Le programme est déjà compilé)
+
+(RE)Compiler le programme:
 
 
-# On Windows with MSys64:
+1. Assurez-vous que GCC ou Clang est installé :
+   ```bash
+   sudo apt-get install build-essential
+   sudo apt-get install libncurses5-dev libncursesw5-dev
+   ```
+2. Clonez le dépôt :
+   ```bash
+   git clone https://github.com/username/grandPrix.git
+   ```
+3. Configurez et compilez le projet :
+   ```bash
+   cd grandPrix
+   mkdir build
+   cd build
+   cmake -DCMAKE_BUILD_TYPE=Release ..
+   make
+   ```
 
-To compile the application under Windows (10+), install msys64. By default msys64 uses ucrt64 tool chain.
-Install new packages using pacman tool (pacman -S [package name])
+Pour démarrer l'applcation:
+
+Ouvrir 2 terminaux
+
+## Server side:
+cd build
+./grandPrix
+
+## Client side:
+cd build
+./genTime -c 1 -t P1 -s 127.0.0.1 -p 1111 -l 57
+
+
+
+
+ # WINDOWS
+
+
+# Installer MSys64:
+
 
 ```
 ucrt64/mingw-w64-ucrt-x86_64-toolchain
 ucrt64/mingw-w64-ucrt-x86_64-cmake
 ucrt64/mingw-w64-ucrt-x86_64-ncurses
 ```
-
-
-# On Raspberry PI:
-
-
-sudo apt-get install libncurses5-dev libncursesw5-dev
-
-
-pi@raspberrypi:~/grandPrix $ cmake -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE -DCMAKE_C_COMPILER:FILEPATH=/usr/bin/gcc -S. -B./build -G "Unix Makefiles"
-pi@raspberrypi:~/grandPrix $ cd build
-pi@raspberrypi:~/grandPrix/build $ make
-
-
-
-# To run the application:
 
 ## Server side:
 UCRT64 /c/Users/DP69SA/cpp/workspace/grandPrix/build
@@ -33,9 +57,3 @@ $ ./grandPrix
 ## Client side:
 UCRT64 /c/Users/DP69SA/cpp/workspace/grandPrix/build
 $ ./genTime -c 1 -t P1 -s 127.0.0.1 -p 1111 -l 57
-
-
-## For automatic launch:
-UCRT64 /c/Users/DP69SA/cpp/workspace/grandPrix/build
-$ export PATH=$PATH:$PWD
-$ ./grandPrix -a
