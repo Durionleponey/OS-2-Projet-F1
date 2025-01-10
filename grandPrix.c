@@ -9,32 +9,21 @@
 #include <getopt.h>
 #include <time.h>
 #include <assert.h>
-#include <sys\stat.h>
-
 #ifdef WIN64
-#include <winsock2.h>
-#include <ncurses/curses.h>
-#endif
-
-#ifdef LINUX
-#include <ncurses.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include <sys\stat.h>
 #endif
 
 #include "grandPrix.h"
+#include "saveFile.h"
 #include "util.h"
-#include "csvParser.h"
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 #define GRANDPRIX_FILENAME "F1_Grand_Prix_2024.csv"
 #define DRIVERS_FILENAME "Drivers.csv"
 
-static const int pSprintScores[] = {8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-static const int pGrandPrixScores[] = {25, 20, 15, 10, 8, 6, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+const int pSprintScores[] = {8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+const int pGrandPrixScores[] = {25, 20, 15, 10, 8, 6, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
@@ -42,30 +31,9 @@ typedef struct structProgramOptions {
   const char *pListenAddress;
   int listenPort;
   int gpYear;
+  int speedFactor;
+  bool autoLaunch;
 } ProgramOptions;
-
-typedef struct structListener {
-  struct sockaddr_in serverAddr;
-  u_short serverPort;
-  socket_t serverSocket;
-} Listener;
-
-typedef struct structClientContext {
-  struct sockaddr_in clientAddr;
-  u_short clientPort;
-  socket_t clientSocket;
-} ClientContext;
-
-typedef struct structContext {
-  CsvRow **ppCsvGrandPrix;
-  CsvRow **ppCsvDrivers;
-  StandingsTable standingsTable;
-  GrandPrix *pGrandPrix;
-  int gpHistoricHandle;
-  int currentGP;
-  int gpYear;
-  Listener listener;
-} Context;
 
 typedef struct structMenuItem {
   const char *pItem;
@@ -73,7 +41,6 @@ typedef struct structMenuItem {
 } MenuItem;
 
 typedef struct structDisplayMenuContext {
-  WINDOW *pWindow;
 } DisplayMenuContext;
 
 typedef struct structCarStatus {
@@ -86,6 +53,7 @@ typedef struct structCarStatus {
   uint32_t lastLapTime;
   uint32_t bestLapTime;
   uint32_t totalLapsTime;
+  uint32_t lastSegmentTS;
   int bestLap;
   int bestS1Time;
   int bestS2Time;
@@ -93,7 +61,9 @@ typedef struct structCarStatus {
   int s1Time;
   int s2Time;
   int s3Time;
+  uint32_t totalPitsTime;
   int pitTime;
+  int pits;
   bool active;
 } CarStatus;
 
@@ -122,40 +92,44 @@ int displayListGPs(Context *pCtx, int choice, void *pUserData);
 int displayListDrivers(Context *pCtx, int choice, void *pUserData);
 int displayStandings(Context *pCtx, int choice, void *pUserData);
 int captureEvents(Context *pCtx, int choice, void *pUserData);
+int displayCompletedGPMenu(Context *pCtx, int choice, void *pUserData);
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 // clang-format off
-static MenuItem pDisplayMainMenu[] = {
+static MenuItem pMainMenu[] = {
   { "Afficher liste des Grand Prix", displayListGPs },
   { "Afficher liste des pilotes", displayListDrivers },
-  { "Afficher des resultats de courses terminees", NULL },
+  { "Afficher des resultats de courses terminees", displayCompletedGPMenu },
   { "Afficher le classement general", displayStandings },
   { "Lancer la capture de l'etape suivante", captureEvents },
-  { "Quitter du programme", NULL },
+  { "Quitter le programme", NULL },
   { NULL, NULL }
 };
 
-static MenuItem pDisplayGPMenu[] = {
-  { "Afficher les Practices 1", NULL },
-  { "Afficher les Practices 2", NULL },
-  { "Afficher les Practices 3", NULL },
-  { "Afficher les Qualifications 1", NULL },
-  { "Afficher les Qualifications 2", NULL },
-  { "Afficher les Qualifications 3", NULL },
+static MenuItem pGPMenu[] = {
+  { "Afficher les essais 1", NULL },
+  { "Afficher les essais 2", NULL },
+  { "Afficher les essais 3", NULL },
+  { "Afficher les qualifications 1", NULL },
+  { "Afficher les qualifications 2", NULL },
+  { "Afficher les qualifications 3", NULL },
+  { "Afficher la grille de depart du Grand Prix", NULL },
   { "Afficher le Grand Prix", NULL },
   { NULL, NULL }
 };
 
-static MenuItem pDisplayGPSpecialMenu[] = {
-  { "Afficher les Practices 1", NULL },
-  { "Afficher les Sprint Qualifications 1", NULL },
-  { "Afficher les Sprint Qualifications 2", NULL },
-  { "Afficher les Sprint Qualifications 3", NULL },
+static MenuItem pGPSpecialMenu[] = {
+  { "Afficher les essais 1", NULL },
+  { "Afficher les qualifications Sprint 1", NULL },
+  { "Afficher les qualifications Sprint 2", NULL },
+  { "Afficher les qualifications Sprint 3", NULL },
+  { "Afficher la grille de depart du Sprint", NULL },
   { "Afficher le Sprint", NULL },
-  { "Afficher les Qualifications 1", NULL },
-  { "Afficher les Qualifications 2", NULL },
-  { "Afficher les Qualifications 3", NULL },
+  { "Afficher les qualifications 1", NULL },
+  { "Afficher les qualifications 2", NULL },
+  { "Afficher les qualifications 3", NULL },
+  { "Afficher la grille de depart du Grand Prix", NULL },
   { "Afficher le Grand Prix", NULL },
   { NULL, NULL }
 };
@@ -251,7 +225,13 @@ void initializeGP(Context *pCtx, int grandPrixId, GrandPrix *pGrandPrix) {
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int compareStandingsTableItem(const void *pA, const void *pB) {
-  return ((StandingsTableItem *)pA)->points - ((StandingsTableItem *)pB)->points;
+  int compare;
+
+  compare = ((StandingsTableItem *)pB)->points - ((StandingsTableItem *)pA)->points;
+  if (compare == 0) {
+    compare = ((StandingsTableItem *)pA)->carId - ((StandingsTableItem *)pB)->carId;
+  }
+  return compare;
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -403,14 +383,10 @@ int readFully(socket_t socket, void *pBuffer, int size) {
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int readHistoric(Context *pCtx) {
-  char pFileName[MAX_PATH];
+  char pFileName[PATH_MAX];
   GrandPrix *pGrandPrix;
-  StandingsTableItem *pStandingsTableItem;
-  SprintItem *pSprintItem;
-  RaceItem *pRaceItem;
   int fileHandle;
   int code;
-  int car;
   int i;
 
   pGrandPrix = (GrandPrix *)calloc(MAX_GP, sizeof(GrandPrix));
@@ -458,33 +434,6 @@ int readHistoric(Context *pCtx) {
   pCtx->pGrandPrix = pGrandPrix;
   pCtx->gpHistoricHandle = fileHandle;
 
-  pStandingsTableItem = (StandingsTableItem *)pCtx->standingsTable.pItems;
-  for (i = 0; i < MAX_DRIVERS; i++) {
-    pStandingsTableItem->carId = i;
-    pStandingsTableItem->points = 0;
-    pStandingsTableItem++;
-  }
-
-  pStandingsTableItem = (StandingsTableItem *)pCtx->standingsTable.pItems;
-  for (i = 0; i < MAX_GP; i++) {
-    if (pGrandPrix->specialGP && pGrandPrix->nextStep > race_SPRINT) {
-      pSprintItem = (SprintItem *)pGrandPrix->sprint.pItems;
-      for (car = 0; car < MAX_DRIVERS; car++) {
-        pStandingsTableItem[pSprintItem->carId].points += pSprintScores[car];
-        pSprintItem++;
-      }
-    }
-    if (pGrandPrix->nextStep > race_GP) {
-      pRaceItem = (RaceItem *)pGrandPrix->race.pItems;
-      for (car = 0; car < MAX_DRIVERS; car++) {
-        pStandingsTableItem[pRaceItem->carId].points += pGrandPrixScores[car];
-        pRaceItem++;
-      }
-    }
-    pGrandPrix++;
-  }
-  qsort(&pCtx->standingsTable.pItems, MAX_DRIVERS, sizeof(StandingsTableItem), compareStandingsTableItem);
-
   return RETURN_OK;
 }
 
@@ -505,26 +454,29 @@ int saveHistoric(Context *pCtx) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-void fillHistoricPractice(Practice *pPractice, RaceType type, LeaderBoard *pLeaderBoard) {
-  PracticeItem *pItems;
+void fillHistoricRace(Race *pRace, RaceType type, LeaderBoard *pLeaderBoard) {
+  RaceInfo *pItems;
   CarStatus *pCars;
   int *pSortIndices;
   int order;
   int i;
 
   pSortIndices = pLeaderBoard->pSortIndices;
-  pPractice->type = type;
-  pItems = pPractice->pItems;
+  pRace->type = type;
+  pItems = pRace->pItems;
   pCars = pLeaderBoard->pCars;
   for (i = 0; i < MAX_DRIVERS; i++) {
     order = *pSortIndices++;
     pCars = &pLeaderBoard->pCars[order];
     pItems->carId = pCars->cardId;
+    pItems->raceTime = pCars->totalLapsTime;
     pItems->bestLapTime = pCars->bestLapTime;
     pItems->bestLap = pCars->bestLap;
     pItems->bestS1 = pCars->bestS1Time;
     pItems->bestS2 = pCars->bestS2Time;
     pItems->bestS3 = pCars->bestS3Time;
+    pItems->pits = pCars->pits;
+    pItems->pitsTime = pCars->totalPitsTime;
     pItems++;
   }
 }
@@ -533,24 +485,56 @@ void fillHistoricPractice(Practice *pPractice, RaceType type, LeaderBoard *pLead
 
 int fillHistoric(Context *pCtx, LeaderBoard *pLeaderBoard) {
   GrandPrix *pGrandPrix;
-  int currentGP;
   bool specialGP;
+  int currentGP;
 
   currentGP = pCtx->currentGP;
   pGrandPrix = &pCtx->pGrandPrix[currentGP];
   specialGP = strcasecmp(pCtx->ppCsvGrandPrix[currentGP]->ppFields[3], "True") == 0;
   switch (pGrandPrix->nextStep) {
   case race_P1:
-    fillHistoricPractice(&pGrandPrix->pPractices[0], race_P1, pLeaderBoard);
+    fillHistoricRace(&pGrandPrix->pPractices[0], race_P1, pLeaderBoard);
     pGrandPrix->nextStep = specialGP ? race_Q1_SPRINT : race_P2;
     break;
   case race_P2:
-    fillHistoricPractice(&pGrandPrix->pPractices[1], race_P2, pLeaderBoard);
+    fillHistoricRace(&pGrandPrix->pPractices[1], race_P2, pLeaderBoard);
     pGrandPrix->nextStep = race_P3;
     break;
   case race_P3:
-    fillHistoricPractice(&pGrandPrix->pPractices[2], race_P3, pLeaderBoard);
+    fillHistoricRace(&pGrandPrix->pPractices[2], race_P3, pLeaderBoard);
     pGrandPrix->nextStep = race_Q1_GP;
+    break;
+  case race_Q1_SPRINT:
+    fillHistoricRace(&pGrandPrix->pSprintShootout[0], race_Q1_SPRINT, pLeaderBoard);
+    pGrandPrix->nextStep = race_Q2_SPRINT;
+    break;
+  case race_Q2_SPRINT:
+    fillHistoricRace(&pGrandPrix->pSprintShootout[1], race_Q2_SPRINT, pLeaderBoard);
+    pGrandPrix->nextStep = race_Q3_SPRINT;
+    break;
+  case race_Q3_SPRINT:
+    fillHistoricRace(&pGrandPrix->pSprintShootout[2], race_Q3_SPRINT, pLeaderBoard);
+    pGrandPrix->nextStep = race_SPRINT;
+    break;
+  case race_SPRINT:
+    fillHistoricRace(&pGrandPrix->sprint, race_SPRINT, pLeaderBoard);
+    pGrandPrix->nextStep = race_Q1_GP;
+    break;
+  case race_Q1_GP:
+    fillHistoricRace(&pGrandPrix->pQualifications[0], race_Q1_GP, pLeaderBoard);
+    pGrandPrix->nextStep = race_Q2_GP;
+    break;
+  case race_Q2_GP:
+    fillHistoricRace(&pGrandPrix->pQualifications[1], race_Q2_GP, pLeaderBoard);
+    pGrandPrix->nextStep = race_Q3_GP;
+    break;
+  case race_Q3_GP:
+    fillHistoricRace(&pGrandPrix->pQualifications[2], race_Q3_GP, pLeaderBoard);
+    pGrandPrix->nextStep = race_GP;
+    break;
+  case race_GP:
+    fillHistoricRace(&pGrandPrix->final, race_GP, pLeaderBoard);
+    pGrandPrix->nextStep = race_FINISHED;
     break;
   default:
     break;
@@ -568,38 +552,203 @@ void freeHistoric(Context *pCtx) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-int displayPractice(Context *pCtx, WINDOW *pWindow, int grandPrixId, Practice *pPractice) {
+int displayRace(Context *pCtx, int grandPrixId, Race *pRace) {
   char pFormat[32];
-  PracticeItem *pPracticeItem;
+  WINDOW *pWindow;
+  RaceInfo *pRaceInfo;
   uint32_t previousTime;
   char **ppFields;
   int carId;
   int i;
 
   ppFields = pCtx->ppCsvGrandPrix[grandPrixId]->ppFields;
+  pWindow = pCtx->pWindow;
 
   werase(pWindow);
-  wattron(pWindow, A_BOLD);
-  mvwprintw(pWindow, 1, 20, "%d %s/%s - %s", pCtx->gpYear, ppFields[0], ppFields[1], raceTypeToString(pPractice->type));
-  mvwprintw(pWindow, 2, 1, "Pos   Number     Driver                      Team                   Time     Gap     Laps");
-  wattroff(pWindow, A_BOLD);
+  if (pRace->type == race_ERROR) {
+    wattron(pWindow, COLOR_PAIR(3));
+    mvwprintw(pWindow, 10, 20, "Cette course n'a pas encore eu lieu");
+    wattroff(pWindow, COLOR_PAIR(3));
+  } else {
+    wattron(pWindow, A_BOLD);
+    mvwprintw(pWindow, 1, 20, "%d %s/%s - %s", pCtx->gpYear, ppFields[0], ppFields[1], raceTypeToString(pRace->type));
+    mvwprintw(pWindow, 2, 1,
+              "Pos   Number     Driver                      Team                        Time         Gap    Points");
+    wattroff(pWindow, A_BOLD);
 
-  pPracticeItem = (PracticeItem *)pPractice->pItems;
-  for (i = 0; i < MAX_DRIVERS; i++) {
-    carId = pPracticeItem->carId;
-    ppFields = pCtx->ppCsvDrivers[carId]->ppFields;
-    mvwprintw(pWindow, i + 3, 1, "%3d  %5s    %-20.20s   %-30.30s", i + 1, ppFields[0], ppFields[1], ppFields[2]);
-    if (pPracticeItem->bestLapTime > 0) {
-      mvwprintw(pWindow, i + 3, 64, "%10s", timestampToMinute(pPracticeItem->bestLapTime, pFormat, sizeof(pFormat)));
-      if (i == 0) {
-        previousTime = pPracticeItem->bestLapTime;
-      } else {
-        mvwprintw(pWindow, i + 3, 75, "%10s",
-                  milliToGap(pPracticeItem->bestLapTime - previousTime, pFormat, sizeof(pFormat)));
+    pRaceInfo = (RaceInfo *)pRace->pItems;
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      carId = pRaceInfo->carId;
+      ppFields = pCtx->ppCsvDrivers[carId]->ppFields;
+      mvwprintw(pWindow, i + 3, 1, "%3d  %5s    %-20.20s   %-30.30s", i + 1, ppFields[0], ppFields[1], ppFields[2]);
+      if (pRaceInfo->raceTime > 0) {
+        mvwprintw(pWindow, i + 3, 70, "%10s", timestampToHour(pRaceInfo->raceTime, pFormat, sizeof(pFormat)));
+        if (i == 0) {
+          previousTime = pRaceInfo->raceTime;
+        } else {
+          mvwprintw(pWindow, i + 3, 83, "%10s",
+                    milliToGap(pRaceInfo->raceTime - previousTime, pFormat, sizeof(pFormat)));
+        }
+        mvwprintw(pWindow, i + 3, 94, "%4d", pGrandPrixScores[i]);
       }
-      mvwprintw(pWindow, i + 3, 86, "%3d", pPracticeItem->bestLap);
+      pRaceInfo++;
     }
-    pPracticeItem++;
+  }
+  wrefresh(pWindow);
+
+  return RETURN_OK;
+}
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
+int displayQualification(Context *pCtx, int grandPrixId, Race *pQualification) {
+  char pFormat[32];
+  WINDOW *pWindow;
+  RaceInfo *pRaceInfo;
+  uint32_t previousTime;
+  char **ppFields;
+  int drivers;
+  int carId;
+  int i;
+
+  ppFields = pCtx->ppCsvGrandPrix[grandPrixId]->ppFields;
+  pWindow = pCtx->pWindow;
+
+  werase(pWindow);
+  if (pQualification->type == race_ERROR) {
+    wattron(pWindow, COLOR_PAIR(3));
+    mvwprintw(pWindow, 10, 20, "Cette course 'Qualification' n'a pas encore eu lieu");
+    wattroff(pWindow, COLOR_PAIR(3));
+  } else {
+    wattron(pWindow, A_BOLD);
+    mvwprintw(pWindow, 1, 20, "%d %s/%s - %s", pCtx->gpYear, ppFields[0], ppFields[1],
+              raceTypeToString(pQualification->type));
+    mvwprintw(pWindow, 2, 1,
+              "Pos   Number     Driver                      Team               Best time    Gap     Laps");
+    wattroff(pWindow, A_BOLD);
+
+    if (pQualification->type == race_Q1_GP || pQualification->type == race_Q1_SPRINT) {
+      drivers = MAX_DRIVERS;
+    } else if (pQualification->type == race_Q2_GP || pQualification->type == race_Q2_SPRINT) {
+      drivers = 15;
+    } else if (pQualification->type == race_Q3_GP || pQualification->type == race_Q3_SPRINT) {
+      drivers = 10;
+    } else {
+      logger(log_FATAL, "illegal race type '%s'. It should be a qualification race\n",
+             raceTypeToString(pQualification->type));
+      return RETURN_KO;
+    }
+    pRaceInfo = (RaceInfo *)pQualification->pItems;
+    for (i = 0; i < drivers; i++) {
+      carId = pRaceInfo->carId;
+      ppFields = pCtx->ppCsvDrivers[carId]->ppFields;
+      mvwprintw(pWindow, i + 3, 1, "%3d  %5s    %-20.20s   %-30.30s", i + 1, ppFields[0], ppFields[1], ppFields[2]);
+      if (pRaceInfo->raceTime > 0) {
+        mvwprintw(pWindow, i + 3, 64, "%10s", timestampToMinute(pRaceInfo->bestLapTime, pFormat, sizeof(pFormat)));
+        if (i == 0) {
+          previousTime = pRaceInfo->bestLapTime;
+        } else {
+          mvwprintw(pWindow, i + 3, 75, "%10s",
+                    milliToGap(pRaceInfo->bestLapTime - previousTime, pFormat, sizeof(pFormat)));
+        }
+        mvwprintw(pWindow, i + 3, 86, "%3d", pRaceInfo->bestLap + 1);
+      }
+      pRaceInfo++;
+    }
+  }
+  wrefresh(pWindow);
+
+  return RETURN_OK;
+}
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
+int displayPractice(Context *pCtx, int grandPrixId, Race *pPractice) {
+  char pFormat[32];
+  WINDOW *pWindow;
+  RaceInfo *pRaceInfo;
+  uint32_t previousTime;
+  char **ppFields;
+  int carId;
+  int i;
+
+  ppFields = pCtx->ppCsvGrandPrix[grandPrixId]->ppFields;
+  pWindow = pCtx->pWindow;
+
+  werase(pWindow);
+  if (pPractice->type == race_ERROR) {
+    wattron(pWindow, COLOR_PAIR(3));
+    mvwprintw(pWindow, 10, 20, "Cette course 'Practice' n'a pas encore eu lieu");
+    wattroff(pWindow, COLOR_PAIR(3));
+  } else {
+    wattron(pWindow, A_BOLD);
+    mvwprintw(pWindow, 1, 20, "%d %s/%s - %s", pCtx->gpYear, ppFields[0], ppFields[1],
+              raceTypeToString(pPractice->type));
+    mvwprintw(pWindow, 2, 1,
+              "Pos   Number     Driver                      Team               Best time    Gap     Laps");
+    wattroff(pWindow, A_BOLD);
+
+    pRaceInfo = (RaceInfo *)pPractice->pItems;
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      carId = pRaceInfo->carId;
+      ppFields = pCtx->ppCsvDrivers[carId]->ppFields;
+      mvwprintw(pWindow, i + 3, 1, "%3d  %5s    %-20.20s   %-30.30s", i + 1, ppFields[0], ppFields[1], ppFields[2]);
+      if (pRaceInfo->bestLapTime > 0) {
+        mvwprintw(pWindow, i + 3, 64, "%10s", timestampToMinute(pRaceInfo->bestLapTime, pFormat, sizeof(pFormat)));
+        if (i == 0) {
+          previousTime = pRaceInfo->bestLapTime;
+        } else {
+          mvwprintw(pWindow, i + 3, 75, "%10s",
+                    milliToGap(pRaceInfo->bestLapTime - previousTime, pFormat, sizeof(pFormat)));
+        }
+        mvwprintw(pWindow, i + 3, 86, "%3d", pRaceInfo->bestLap + 1);
+      }
+      pRaceInfo++;
+    }
+  }
+  wrefresh(pWindow);
+
+  return RETURN_OK;
+}
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
+int displayStartingGrid(Context *pCtx, int grandPrixId, Race *pQualification) {
+  char pFormat[32];
+  WINDOW *pWindow;
+  RaceInfo *pRaceInfo;
+  char **ppFields;
+  int carId;
+  int i;
+
+  ppFields = pCtx->ppCsvGrandPrix[grandPrixId]->ppFields;
+  pWindow = pCtx->pWindow;
+
+  werase(pWindow);
+  if (pQualification[2].type == race_ERROR) {
+    wattron(pWindow, COLOR_PAIR(3));
+    mvwprintw(pWindow, 10, 20, "Les 3 courses de 'Qualification' ne sont pas terminees");
+    wattroff(pWindow, COLOR_PAIR(3));
+  } else {
+    wattron(pWindow, A_BOLD);
+    mvwprintw(pWindow, 1, 15, "%d %s/%s - Grille de depart", pCtx->gpYear, ppFields[0], ppFields[1]);
+    mvwprintw(pWindow, 2, 1, "Pos   Number     Driver                      Team                       Best time");
+    wattroff(pWindow, A_BOLD);
+
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      if (i == 0) {
+        pRaceInfo = (RaceInfo *)pQualification[2].pItems;
+      } else if (i == 10) {
+        pRaceInfo = (RaceInfo *)&pQualification[1].pItems[10];
+      } else if (i == 15) {
+        pRaceInfo = (RaceInfo *)&pQualification[0].pItems[15];
+      }
+      carId = pRaceInfo->carId;
+      ppFields = pCtx->ppCsvDrivers[carId]->ppFields;
+      mvwprintw(pWindow, i + 3, 1, "%3d  %5s    %-20.20s   %-30.30s    %10s", i + 1, ppFields[0], ppFields[1],
+                ppFields[2], timestampToMinute(pRaceInfo->bestLapTime, pFormat, sizeof(pFormat)));
+      pRaceInfo++;
+    }
   }
   wrefresh(pWindow);
 
@@ -610,18 +759,48 @@ int displayPractice(Context *pCtx, WINDOW *pWindow, int grandPrixId, Practice *p
 
 int displayStandings(Context *pCtx, int choice, void *pUserData) {
   StandingsTableItem *pStandingsTableItem;
-  DisplayMenuContext *pDisplayCtx;
+  RaceInfo *pSprintInfo;
+  RaceInfo *pGrandPrixInfo;
+  GrandPrix *pGrandPrix;
   WINDOW *pWindow;
   char **ppFields;
   int carId;
+  int car;
   int i;
 
-  pDisplayCtx = (DisplayMenuContext *)pUserData;
-  pWindow = pDisplayCtx->pWindow;
+  pGrandPrix = pCtx->pGrandPrix;
+  pStandingsTableItem = (StandingsTableItem *)pCtx->standingsTable.pItems;
+  for (i = 0; i < MAX_DRIVERS; i++) {
+    pStandingsTableItem->carId = i;
+    pStandingsTableItem->points = 0;
+    pStandingsTableItem++;
+  }
+
+  pStandingsTableItem = (StandingsTableItem *)pCtx->standingsTable.pItems;
+  for (i = 0; i < MAX_GP; i++) {
+    if (pGrandPrix->specialGP && pGrandPrix->nextStep > race_SPRINT) {
+      pSprintInfo = (RaceInfo *)pGrandPrix->sprint.pItems;
+      for (car = 0; car < MAX_DRIVERS; car++) {
+        pStandingsTableItem[pSprintInfo->carId].points += pSprintScores[car];
+        pSprintInfo++;
+      }
+    }
+    if (pGrandPrix->nextStep > race_GP) {
+      pGrandPrixInfo = (RaceInfo *)pGrandPrix->final.pItems;
+      for (car = 0; car < MAX_DRIVERS; car++) {
+        pStandingsTableItem[pGrandPrixInfo->carId].points += pGrandPrixScores[car];
+        pGrandPrixInfo++;
+      }
+    }
+    pGrandPrix++;
+  }
+  qsort(&pCtx->standingsTable.pItems, MAX_DRIVERS, sizeof(StandingsTableItem), compareStandingsTableItem);
+
+  pWindow = pCtx->pWindow;
   werase(pWindow);
 
   wattron(pWindow, A_BOLD);
-  mvwprintw(pWindow, 1, 25, "%d - Driver Standings", pCtx->gpYear);
+  mvwprintw(pWindow, 1, 25, "%d - Classement des pilotes", pCtx->gpYear);
   mvwprintw(pWindow, 2, 1, "Pos   Number     Driver                      Team                   Total points");
   wattroff(pWindow, A_BOLD);
 
@@ -643,23 +822,24 @@ int displayStandings(Context *pCtx, int choice, void *pUserData) {
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int displayListGPs(Context *pCtx, int choice, void *pUserData) {
-  DisplayMenuContext *pDisplayCtx;
   WINDOW *pWindow;
   char **ppFields;
+  bool specialGP;
   int i;
 
-  pDisplayCtx = (DisplayMenuContext *)pUserData;
-  pWindow = pDisplayCtx->pWindow;
+  pWindow = pCtx->pWindow;
   werase(pWindow);
 
   wattron(pWindow, A_BOLD);
-  mvwprintw(pWindow, 1, 30, "%d - List of Grand Prix", pCtx->gpYear);
+  mvwprintw(pWindow, 1, 30, "%d - Liste des Grand Prix", pCtx->gpYear);
   mvwprintw(pWindow, 2, 1, "        Name                       Circuit                     Laps");
   wattroff(pWindow, A_BOLD);
 
   for (i = 0; i < MAX_GP; i++) {
     ppFields = pCtx->ppCsvGrandPrix[i]->ppFields;
-    mvwprintw(pWindow, i + 3, 1, "%3d  %-20.20s   %-30.30s   %5s", i + 1, ppFields[0], ppFields[1], ppFields[2]);
+    specialGP = strcasecmp(ppFields[3], "True") == 0;
+    mvwprintw(pWindow, i + 3, 1, "%3d  %-20.20s   %-30.30s   %5s %c", i + 1, ppFields[0], ppFields[1], ppFields[2],
+              specialGP ? '*' : ' ');
   }
   wrefresh(pWindow);
 
@@ -671,17 +851,15 @@ int displayListGPs(Context *pCtx, int choice, void *pUserData) {
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int displayListDrivers(Context *pCtx, int choice, void *pUserData) {
-  DisplayMenuContext *pDisplayCtx;
   WINDOW *pWindow;
   char **ppFields;
   int i;
 
-  pDisplayCtx = (DisplayMenuContext *)pUserData;
-  pWindow = pDisplayCtx->pWindow;
+  pWindow = pCtx->pWindow;
   werase(pWindow);
 
   wattron(pWindow, A_BOLD);
-  mvwprintw(pWindow, 1, 25, "%d - List of drivers", pCtx->gpYear);
+  mvwprintw(pWindow, 1, 25, "%d - Liste des pilotes", pCtx->gpYear);
   mvwprintw(pWindow, 2, 1, " Number        Name                          Team");
   wattroff(pWindow, A_BOLD);
 
@@ -698,10 +876,13 @@ int displayListDrivers(Context *pCtx, int choice, void *pUserData) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-int displayMenu(Context *pCtx, MenuItem *pMenu, void *pUserData) {
+int displayMenu(Context *pCtx, MenuItem *pMenu, bool back, int position, void *pUserData) {
+  const char *pBackMessage = "Retour en arriere";
   size_t maxTextLength;
   size_t length;
   WINDOW *pMenuWin;
+  int currentChoice;
+  int returnCode;
   int menuItems;
   int key;
   int i;
@@ -715,6 +896,15 @@ int displayMenu(Context *pCtx, MenuItem *pMenu, void *pUserData) {
     }
     menuItems++;
   }
+  if (back) {
+    length = strlen(pBackMessage);
+    if (length > maxTextLength) {
+      maxTextLength = length;
+    }
+    menuItems++;
+  }
+
+  assert(menuItems > 0);
 
   pMenuWin = newwin(2 + menuItems, maxTextLength + 14, LINES - (4 + menuItems), 6);
   box(pMenuWin, ACS_VLINE, ACS_HLINE);
@@ -723,14 +913,18 @@ int displayMenu(Context *pCtx, MenuItem *pMenu, void *pUserData) {
   curs_set(0);
   keypad(pMenuWin, TRUE);
 
-  int currentChoice = 0;
+  currentChoice = position < menuItems && position >= 0 ? position : 0;
 
   while (true) {
     for (i = 0; i < menuItems; i++) {
       if (i == currentChoice) {
         wattron(pMenuWin, A_REVERSE);
       }
-      mvwprintw(pMenuWin, i + 1, 3, pMenu[i].pItem);
+      if (back && i == menuItems - 1) {
+        mvwprintw(pMenuWin, i + 1, 3, pBackMessage);
+      } else {
+        mvwprintw(pMenuWin, i + 1, 3, pMenu[i].pItem);
+      }
       if (i == currentChoice) {
         wattroff(pMenuWin, A_REVERSE);
       }
@@ -754,23 +948,31 @@ int displayMenu(Context *pCtx, MenuItem *pMenu, void *pUserData) {
       }
       break;
     case 10:
-      if (pMenu[currentChoice].pMenuAction != NULL) {
-        werase(pMenuWin);
-        wrefresh(pMenuWin);
-        delwin(pMenuWin);
-        pMenu[currentChoice].pMenuAction(pCtx, currentChoice, pUserData);
+      if (back && currentChoice == menuItems - 1) {
+        returnCode = -1;
+        goto displayMenuExit;
+      } else {
+        if (pMenu[currentChoice].pMenuAction != NULL) {
+          werase(pMenuWin);
+          wrefresh(pMenuWin);
+          pMenu[currentChoice].pMenuAction(pCtx, currentChoice, pUserData);
+        }
+        returnCode = currentChoice;
       }
-      return currentChoice;
+      goto displayMenuExit;
     default:
       break;
     }
   }
 
+  returnCode = RETURN_OK;
+
+displayMenuExit:
   werase(pMenuWin);
   wrefresh(pMenuWin);
   delwin(pMenuWin);
 
-  return RETURN_OK;
+  return returnCode;
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -802,6 +1004,134 @@ int readString(WINDOW *pWindow, char *pString, int maxLength) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
+int displayRaceResult(Context *pCtx, int grandPrixId) {
+  GrandPrix *pGrandPrix;
+  bool special;
+  int race;
+
+  race = 0;
+  pGrandPrix = &pCtx->pGrandPrix[grandPrixId];
+  special = pGrandPrix->specialGP;
+
+  if (special) {
+    while (true) {
+      race = displayMenu(pCtx, pGPSpecialMenu, true, race, NULL);
+      if (race == -1) {
+        break;
+      }
+
+      if (race == 0) {
+        displayPractice(pCtx, grandPrixId, &pGrandPrix->pPractices[0]);
+      } else if (race == 1) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pSprintShootout[0]);
+      } else if (race == 2) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pSprintShootout[1]);
+      } else if (race == 3) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pSprintShootout[2]);
+      } else if (race == 4) {
+        displayStartingGrid(pCtx, grandPrixId, pGrandPrix->pSprintShootout);
+      } else if (race == 5) {
+        displayRace(pCtx, grandPrixId, &pGrandPrix->sprint);
+      } else if (race == 6) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pQualifications[0]);
+      } else if (race == 7) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pQualifications[1]);
+      } else if (race == 8) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pQualifications[2]);
+      } else if (race == 9) {
+        displayStartingGrid(pCtx, grandPrixId, pGrandPrix->pQualifications);
+      } else if (race == 10) {
+        displayRace(pCtx, grandPrixId, &pGrandPrix->final);
+      }
+    }
+  } else {
+    while (true) {
+      race = displayMenu(pCtx, pGPMenu, true, race, NULL);
+      if (race == -1) {
+        break;
+      }
+
+      if (race == 0) {
+        displayPractice(pCtx, grandPrixId, &pGrandPrix->pPractices[0]);
+      } else if (race == 1) {
+        displayPractice(pCtx, grandPrixId, &pGrandPrix->pPractices[1]);
+      } else if (race == 2) {
+        displayPractice(pCtx, grandPrixId, &pGrandPrix->pPractices[2]);
+      } else if (race == 3) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pQualifications[0]);
+      } else if (race == 4) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pQualifications[1]);
+      } else if (race == 5) {
+        displayQualification(pCtx, grandPrixId, &pGrandPrix->pQualifications[2]);
+      } else if (race == 6) {
+        displayStartingGrid(pCtx, grandPrixId, pGrandPrix->pQualifications);
+      } else if (race == 7) {
+        displayRace(pCtx, grandPrixId, &pGrandPrix->final);
+      }
+    }
+  }
+
+  return RETURN_OK;
+}
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
+int displayCompletedGPMenu(Context *pCtx, int choice, void *pUserData) {
+  MenuItem *pMenuItems;
+  char *pMenuLabel;
+  char **ppFields;
+  size_t length;
+  int gps;
+  int gp;
+  int i;
+
+  gps = pCtx->currentGP + 1;
+  pMenuItems = (MenuItem *)malloc(sizeof(MenuItem) * (gps + 1));
+  if (pMenuItems == NULL) {
+    logger(log_FATAL, "unable to allocate %d bytes for GrandPrix menu.\n", sizeof(MenuItem) * (gps + 1));
+    return RETURN_KO;
+  }
+
+  for (i = 0; i < gps; i++) {
+    ppFields = pCtx->ppCsvGrandPrix[i]->ppFields;
+    length = strlen(ppFields[0]) + strlen(ppFields[1]) + 2;
+    pMenuLabel = (char *)malloc(length);
+    if (pMenuLabel == NULL) {
+      logger(log_FATAL, "unable to allocate %d bytes for GP menu item.\n", length);
+      goto displayAllGPMenuExit;
+    }
+    sprintf(pMenuLabel, "%s/%s", ppFields[0], ppFields[1]);
+
+    pMenuItems[i].pItem = pMenuLabel;
+    pMenuItems[i].pMenuAction = NULL;
+  }
+  pMenuItems[i].pItem = NULL;
+  pMenuItems[i].pMenuAction = NULL;
+
+  gp = 0;
+  while (true) {
+    gp = displayMenu(pCtx, pMenuItems, true, gp, NULL);
+    if (gp == -1) {
+      break;
+    }
+    displayRaceResult(pCtx, gp);
+  }
+
+displayAllGPMenuExit:
+  for (i = 0; i <= gps; i++) {
+    if (pMenuItems[i].pItem == NULL) {
+      break;
+    }
+    free((void *)pMenuItems[i].pItem);
+  }
+
+  free(pMenuItems);
+
+  return RETURN_OK;
+}
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
 #ifdef WIN64
 int compareCarStatus(void *pUserData, const void *pLeft, const void *pRight) {
 #else
@@ -816,22 +1146,29 @@ int compareCarStatus(const void *pLeft, const void *pRight, void *pUserData) {
   pCarA = &pCarStatus[*(int *)pLeft];
   pCarB = &pCarStatus[*(int *)pRight];
 
-  compare = pCarB->segments - pCarA->segments;
-  if (compare == 0) {
-    compare = pCarA->totalLapsTime - pCarB->totalLapsTime;
+  if (pCarA->active && pCarB->active) {
+    compare = pCarB->segments - pCarA->segments;
     if (compare == 0) {
-      compare = pCarA->cardId - pCarB->cardId;
+      compare = pCarA->totalLapsTime - pCarB->totalLapsTime;
+      if (compare == 0) {
+        compare = pCarA->cardId - pCarB->cardId;
+      }
     }
+    return compare;
   }
-  return compare;
+
+  if (!pCarA->active && !pCarB->active) {
+    return pCarA->cardId - pCarB->cardId;
+  }
+  return pCarA->active ? -1 : 1;
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 #ifdef WIN64
-int compareCarStatusPractice(void *pUserData, const void *pLeft, const void *pRight) {
+int compareCarStatusBestLap(void *pUserData, const void *pLeft, const void *pRight) {
 #else
-int compareCarStatusPractice(const void *pLeft, const void *pRight, void *pUserData) {
+int compareCarStatusBestLap(const void *pLeft, const void *pRight, void *pUserData) {
 #endif
   CarStatus *pCarStatus;
   CarStatus *pCarA;
@@ -841,18 +1178,25 @@ int compareCarStatusPractice(const void *pLeft, const void *pRight, void *pUserD
   pCarA = &pCarStatus[*(int *)pLeft];
   pCarB = &pCarStatus[*(int *)pRight];
 
-  if (pCarA->bestLapTime == 0) {
-    if (pCarB->bestLapTime == 0) {
-      return pCarA->cardId - pCarB->cardId;
+  if (pCarA->active && pCarB->active) {
+    if (pCarA->bestLapTime == 0) {
+      if (pCarB->bestLapTime == 0) {
+        return pCarA->cardId - pCarB->cardId;
+      }
+      return 1;
     }
-    return 1;
+
+    if (pCarB->bestLapTime == 0) {
+      return -1;
+    }
+
+    return pCarA->bestLapTime - pCarB->bestLapTime;
   }
 
-  if (pCarB->bestLapTime == 0) {
-    return -1;
+  if (!pCarA->active && !pCarB->active) {
+    return pCarA->cardId - pCarB->cardId;
   }
-
-  return pCarA->bestLapTime - pCarB->bestLapTime;
+  return pCarA->active ? -1 : 1;
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -861,34 +1205,32 @@ int displayLeaderBoard(Context *pCtx, WINDOW *pWindow, LeaderBoard *pLeaderBoard
 
   char pDisplay[32];
   int *pSortIndices;
+  EventType event;
   CarStatus *pCars;
   CarStatus *pCar;
-  bool practice;
+  bool bestLap;
   int i;
 
   pCars = pLeaderBoard->pCars;
   pSortIndices = pLeaderBoard->pSortIndices;
-  practice = pLeaderBoard->type == race_P1 || pLeaderBoard->type == race_P2 || pLeaderBoard->type == race_P2;
+  bestLap = pLeaderBoard->type != race_SPRINT && pLeaderBoard->type != race_GP;
 #ifdef WIN64
-  if (practice) {
-    qsort_s(pSortIndices, pLeaderBoard->cars, sizeof(int), compareCarStatusPractice, pCars);
+  if (bestLap) {
+    qsort_s(pSortIndices, pLeaderBoard->cars, sizeof(int), compareCarStatusBestLap, pCars);
   } else {
     qsort_s(pSortIndices, pLeaderBoard->cars, sizeof(int), compareCarStatus, pCars);
   }
 #else
-  if (practice) {
-    qsort_r(pSortIndices, pLeaderBoard->cars, sizeof(int), compareCarStatusPractice, pCars);
+  if (bestLap) {
+    qsort_r(pSortIndices, pLeaderBoard->cars, sizeof(int), compareCarStatusBestLap, pCars);
   } else {
     qsort_r(pSortIndices, pLeaderBoard->cars, sizeof(int), compareCarStatus, pCars);
   }
 #endif
 
-  init_pair(2, COLOR_GREEN, COLOR_BLACK);
-  init_pair(3, COLOR_RED, COLOR_BLACK);
-
   wattron(pWindow, A_BOLD);
-  mvwprintw(pWindow, 1, 1, "Pos  Car's name   Lap #    S1 time   S2 time   S3 time   Best lap time   %s",
-            practice ? "Best lap" : "Total time");
+  mvwprintw(pWindow, 1, 1, "Pos  Car's name             Lap #    S1 time   S2 time   S3 time   Best lap time   %s",
+            bestLap ? "Best lap" : "Pits   Total time");
   wattroff(pWindow, A_BOLD);
 
   for (i = 0; i < pLeaderBoard->cars; i++) {
@@ -897,41 +1239,58 @@ int displayLeaderBoard(Context *pCtx, WINDOW *pWindow, LeaderBoard *pLeaderBoard
     pCar = &pCars[pSortIndices[i]];
     if (pCar->active == false) {
       wattron(pWindow, COLOR_PAIR(3));
-      mvwprintw(pWindow, i + 3, 1, "%.10s", pCtx->ppCsvDrivers[pCar->cardId]->ppFields[1]);
+      mvwprintw(pWindow, i + 3, 6, "%-20.20s", pCtx->ppCsvDrivers[pCar->cardId]->ppFields[1]);
       wattroff(pWindow, COLOR_PAIR(3));
       continue;
     }
+
+    event = pCar->lastEvent;
+    if (event == event_PIT_START) {
+      wattron(pWindow, COLOR_PAIR(4));
+    }
+
     wattron(pWindow, A_BOLD);
-    mvwprintw(pWindow, i + 3, 6, "%.10s", pCtx->ppCsvDrivers[pCar->cardId]->ppFields[1]);
+    mvwprintw(pWindow, i + 3, 6, "%-20.20s", pCtx->ppCsvDrivers[pCar->cardId]->ppFields[1]);
     wattroff(pWindow, A_BOLD);
 
-    if (pCar->lastEvent == event_END) {
-      mvwprintw(pWindow, i + 3, 19, "  *");
+    if (event == event_END) {
+      mvwprintw(pWindow, i + 3, 29, "  *");
     } else {
-      mvwprintw(pWindow, i + 3, 19, "%3d", pCar->currentLap + 1);
+      mvwprintw(pWindow, i + 3, 29, "%3d", pCar->currentLap + 1);
     }
 
-    if (pCar->lastEvent == event_START || pCar->lastEvent == event_S3) {
+    if (event == event_START || event == event_S3) {
       wattron(pWindow, COLOR_PAIR(2));
     }
-    mvwprintw(pWindow, i + 3, 25, "%9s", timestampToSeconds(pCar->s1Time, pDisplay, sizeof(pDisplay)));
-    wattroff(pWindow, COLOR_PAIR(2));
-    if (pCar->lastEvent == event_S1) {
+    mvwprintw(pWindow, i + 3, 35, "%9s", timestampToSecond(pCar->s1Time, pDisplay, sizeof(pDisplay)));
+    if (event == event_START || event == event_S3) {
+      wattroff(pWindow, COLOR_PAIR(2));
+    }
+    if (event == event_S1) {
       wattron(pWindow, COLOR_PAIR(2));
     }
-    mvwprintw(pWindow, i + 3, 35, "%9s", timestampToSeconds(pCar->s2Time, pDisplay, sizeof(pDisplay)));
-    wattroff(pWindow, COLOR_PAIR(2));
-    if (pCar->lastEvent == event_S2) {
+    mvwprintw(pWindow, i + 3, 45, "%9s", timestampToSecond(pCar->s2Time, pDisplay, sizeof(pDisplay)));
+    if (event == event_S1) {
+      wattroff(pWindow, COLOR_PAIR(2));
+    }
+    if (event == event_S2 || event == event_PIT_END) {
       wattron(pWindow, COLOR_PAIR(2));
     }
-    mvwprintw(pWindow, i + 3, 45, "%9s", timestampToSeconds(pCar->s3Time, pDisplay, sizeof(pDisplay)));
-    wattroff(pWindow, COLOR_PAIR(2));
+    mvwprintw(pWindow, i + 3, 55, "%9s", timestampToSecond(pCar->s3Time, pDisplay, sizeof(pDisplay)));
+    if (event == event_S2 || event == event_PIT_END) {
+      wattroff(pWindow, COLOR_PAIR(2));
+    }
 
-    mvwprintw(pWindow, i + 3, 59, "%10s", timestampToMinute(pCar->bestLapTime, pDisplay, sizeof(pDisplay)));
-    if (practice) {
-      mvwprintw(pWindow, i + 3, 74, "%5d", pCar->bestLap + 1);
+    mvwprintw(pWindow, i + 3, 69, "%10s", timestampToMinute(pCar->bestLapTime, pDisplay, sizeof(pDisplay)));
+    if (bestLap) {
+      mvwprintw(pWindow, i + 3, 84, "%5d", pCar->bestLap + 1);
     } else {
-      mvwprintw(pWindow, i + 3, 70, "%15s", timestampToHour(pCar->totalLapsTime, pDisplay, sizeof(pDisplay)));
+      mvwprintw(pWindow, i + 3, 80, "%5d  %15s", pCar->pits,
+                timestampToHour(pCar->totalLapsTime, pDisplay, sizeof(pDisplay)));
+    }
+
+    if (event == event_PIT_START) {
+      wattroff(pWindow, COLOR_PAIR(4));
     }
   }
   wrefresh(pWindow);
@@ -948,7 +1307,6 @@ int processEvent(AcquireThreadCtx *pThreadCtx, EventRace *pEvent) {
 
   pCar = &pThreadCtx->pCarStatus[pEvent->car];
   if (pCar->active == false) {
-    logger(log_WARN, "an event for inactive car #%d was received\n", pEvent->car);
     return RETURN_OK;
   }
 
@@ -960,25 +1318,28 @@ int processEvent(AcquireThreadCtx *pThreadCtx, EventRace *pEvent) {
     pCar->currentLap = 0;
     break;
   case event_S1:
-    pCar->s1Time = pEvent->timestamp - pCar->lastEventTS;
+    pCar->s1Time = pEvent->timestamp - pCar->lastSegmentTS;
     if (pCar->bestS1Time == 0 || pCar->bestS1Time > pCar->s1Time) {
       pCar->bestS1Time = pCar->s1Time;
     }
     pCar->s2Time = 0;
     pCar->totalLapsTime += pCar->s1Time;
+    pCar->pitTime = 0;
+    pCar->lastSegmentTS = pEvent->timestamp;
     pCar->segments++;
     break;
   case event_S2:
-    pCar->s2Time = pEvent->timestamp - pCar->lastEventTS;
+    pCar->s2Time = pEvent->timestamp - pCar->lastSegmentTS;
     if (pCar->bestS2Time == 0 || pCar->bestS2Time > pCar->s2Time) {
       pCar->bestS2Time = pCar->s2Time;
     }
     pCar->s3Time = 0;
     pCar->totalLapsTime += pCar->s2Time;
+    pCar->lastSegmentTS = pEvent->timestamp;
     pCar->segments++;
     break;
   case event_S3:
-    pCar->s3Time = pEvent->timestamp - pCar->lastEventTS;
+    pCar->s3Time = pEvent->timestamp - pCar->lastSegmentTS;
     if (pCar->bestS3Time == 0 || pCar->bestS3Time > pCar->s3Time) {
       pCar->bestS3Time = pCar->s3Time;
     }
@@ -991,6 +1352,7 @@ int processEvent(AcquireThreadCtx *pThreadCtx, EventRace *pEvent) {
     pCar->currentLap = pEvent->lap + 1;
     pCar->startLapTimestamp = pEvent->timestamp;
     pCar->totalLapsTime += pCar->s3Time;
+    pCar->lastSegmentTS = pEvent->timestamp;
     pCar->segments++;
     break;
   case event_OUT:
@@ -999,10 +1361,11 @@ int processEvent(AcquireThreadCtx *pThreadCtx, EventRace *pEvent) {
   case event_END:
     break;
   case event_PIT_START:
-    logger(log_INFO, "should be implemented\n");
     break;
   case event_PIT_END:
+    pCar->pits++;
     pCar->pitTime = pEvent->timestamp - pCar->lastEventTS;
+    pCar->totalPitsTime += pCar->pitTime;
     break;
   }
 
@@ -1032,8 +1395,6 @@ void *acquireData(void *pThreadArg) {
     processEvent(pThreadCtx, &event);
   }
 
-  closesocket(socket);
-
   pThreadCtx->threadStillAlive = false;
 
   return pThreadArg;
@@ -1043,9 +1404,9 @@ void *acquireData(void *pThreadArg) {
 
 int captureEvents(Context *pCtx, int choice, void *pUserData) {
   AcquireThreadCtx acquireThreadCtx;
-  DisplayMenuContext *pDisplayCtx;
   CarStatus pCarStatus[MAX_DRIVERS];
   LeaderBoard leaderBoard;
+  GrandPrix *pGrandPrix;
   WINDOW *pWindow;
   char pLastGrandPrix[128];
   const char *pMessage;
@@ -1057,16 +1418,14 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
   int code;
   int i;
 
-  memset(pCarStatus, 0, sizeof(pCarStatus));
-  for (i = 0; i < MAX_DRIVERS; i++) {
-    pCarStatus[i].cardId = i;
-    pCarStatus[i].active = true;
-  }
+  assert(pCtx->currentGP >= 0 && pCtx->currentGP < MAX_GP);
+
+  pGrandPrix = &pCtx->pGrandPrix[pCtx->currentGP];
 
   leaderBoard.grandPrixId = pCtx->currentGP;
-  leaderBoard.type = pCtx->pGrandPrix[leaderBoard.grandPrixId].nextStep;
-  leaderBoard.cars = MAX_DRIVERS;
+  leaderBoard.type = pGrandPrix->nextStep;
   leaderBoard.pCars = pCarStatus;
+  leaderBoard.cars = MAX_DRIVERS;
   leaderBoard.lastEventTimestamp = 0;
   leaderBoard.raceStartTime = 0;
   leaderBoard.pSortIndices = (int *)malloc(sizeof(int) * leaderBoard.cars);
@@ -1074,8 +1433,35 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
     leaderBoard.pSortIndices[i] = i;
   }
 
-  pDisplayCtx = (DisplayMenuContext *)pUserData;
-  pWindow = pDisplayCtx->pWindow;
+  memset(pCarStatus, 0, sizeof(pCarStatus));
+  if (leaderBoard.type == race_Q2_GP) {
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      pCarStatus[i].cardId = pGrandPrix->pQualifications[0].pItems[i].carId;
+      pCarStatus[i].active = i < 15;
+    }
+  } else if (leaderBoard.type == race_Q2_SPRINT) {
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      pCarStatus[i].cardId = pGrandPrix->pSprintShootout[0].pItems[i].carId;
+      pCarStatus[i].active = i < 15;
+    }
+  } else if (leaderBoard.type == race_Q3_GP) {
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      pCarStatus[i].cardId = pGrandPrix->pQualifications[1].pItems[i].carId;
+      pCarStatus[i].active = i < 10;
+    }
+  } else if (leaderBoard.type == race_Q3_SPRINT) {
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      pCarStatus[i].cardId = pGrandPrix->pSprintShootout[1].pItems[i].carId;
+      pCarStatus[i].active = i < 10;
+    }
+  } else {
+    for (i = 0; i < MAX_DRIVERS; i++) {
+      pCarStatus[i].cardId = i;
+      pCarStatus[i].active = true;
+    }
+  }
+
+  pWindow = pCtx->pWindow;
   werase(pWindow);
 
   getmaxyx(pWindow, maxY, maxX);
@@ -1086,6 +1472,47 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
           raceTypeToString(leaderBoard.type));
   mvwprintw(pWindow, maxY / 2 - 1, (maxX - strlen(pLastGrandPrix)) / 2, pLastGrandPrix);
   wrefresh(pWindow);
+
+#ifdef LINUX
+  if (pCtx->autoLaunch) {
+    sleep(5);
+
+    code = fork();
+    if (code == -1) {
+      logger(log_ERROR, "unable to create a new process, errno=%d\n", errno);
+      goto captureEventsExit;
+    }
+    if (code == 0) {
+      const char *ppArgs[12];
+      char pGrandPrixId[16];
+      char pSpeedFactor[16];
+
+      sprintf(pGrandPrixId, "-c%d", leaderBoard.grandPrixId);
+      ppArgs[0] = "genTime";
+      ppArgs[1] = pGrandPrixId;
+      ppArgs[2] = "-t";
+      ppArgs[3] = raceTypeToString(leaderBoard.type);
+      ppArgs[4] = "-s127.0.0.1";
+      ppArgs[5] = "-p1111";
+      ppArgs[6] = "-l";
+      ppArgs[7] = pCtx->ppCsvGrandPrix[pCtx->currentGP]->ppFields[leaderBoard.type == race_SPRINT ? 4 : 2];
+      if (pCtx->speedFactor > 0) {
+        sprintf(pSpeedFactor, "-%.*s", pCtx->speedFactor, "ffffff");
+        ppArgs[8] = pSpeedFactor;
+        ppArgs[9] = NULL;
+      } else {
+        ppArgs[8] = NULL;
+      }
+
+      code = execv("genTime", (char *const *)ppArgs);
+      if (code) {
+        logger(log_ERROR, "unable to launch executable 'gentime', errno=%d\n", errno);
+      }
+      exit(code);
+    }
+    logger(log_INFO, "a new process (pid=%d) will simulate the race\n", code);
+  }
+#endif
 
   code = acceptConnection(&pCtx->listener, &clientCtx);
   if (code) {
@@ -1099,6 +1526,7 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
   acquireThreadCtx.pCtx = pCtx;
   acquireThreadCtx.pClientCtx = &clientCtx;
   acquireThreadCtx.pCarStatus = pCarStatus;
+  acquireThreadCtx.threadStillAlive = true;
   code = pthread_create(&threadId, NULL, acquireData, &acquireThreadCtx);
   if (code) {
     logger(log_ERROR, "unable to create new thread to capture data, code=%d\n", errno);
@@ -1110,6 +1538,7 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
     sleep(1);
     displayLeaderBoard(pCtx, pWindow, &leaderBoard);
   }
+  displayLeaderBoard(pCtx, pWindow, &leaderBoard);
 
   code = pthread_join(threadId, NULL);
   if (code) {
@@ -1118,11 +1547,23 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
     goto captureEventsExit;
   }
 
+  closesocket(clientCtx.clientSocket);
+
   code = fillHistoric(pCtx, &leaderBoard);
   if (code) {
     logger(log_ERROR, "unable to fill historic race, code=%d\n", code);
     returnCode = code;
     goto captureEventsExit;
+  }
+
+  code = saveHistoric(pCtx);
+  if (code) {
+    return code;
+  }
+
+  code = saveGrandPrixToFile(pCtx, pCtx->currentGP);
+  if (code) {
+    return code;
   }
 
   returnCode = RETURN_OK;
@@ -1136,7 +1577,6 @@ captureEventsExit:
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int grandPrixCore(ProgramOptions *pOptions) {
-  DisplayMenuContext menuCtx;
   WINDOW *pWindow;
   Context ctx;
   int code;
@@ -1145,6 +1585,8 @@ int grandPrixCore(ProgramOptions *pOptions) {
   if (code) {
     return code;
   }
+  ctx.speedFactor = pOptions->speedFactor;
+  ctx.autoLaunch = pOptions->autoLaunch;
   ctx.gpYear = pOptions->gpYear;
 
   code = readHistoric(&ctx);
@@ -1161,14 +1603,16 @@ int grandPrixCore(ProgramOptions *pOptions) {
   start_color();
   curs_set(0);
 
+  init_pair(2, COLOR_GREEN, COLOR_BLACK);
+  init_pair(3, COLOR_RED, COLOR_BLACK);
+  init_pair(4, COLOR_YELLOW, COLOR_BLACK);
+
   pWindow = newwin(27, 120, 1, 1);
+  ctx.pWindow = pWindow;
 
-  code = displayPractice(&ctx, pWindow, 0, &ctx.pGrandPrix[0].pPractices[0]);
-  sleep(1);
-
-  menuCtx.pWindow = pWindow;
+  code = 0;
   while (true) {
-    code = displayMenu(&ctx, pDisplayMainMenu, &menuCtx);
+    code = displayMenu(&ctx, pMainMenu, false, code, NULL);
     if (code == 5) {
       break;
     }
@@ -1176,11 +1620,6 @@ int grandPrixCore(ProgramOptions *pOptions) {
 
   delwin(pWindow);
   endwin();
-
-  code = saveHistoric(&ctx);
-  if (code) {
-    return code;
-  }
 
   stopListening(&ctx);
 
@@ -1201,14 +1640,27 @@ int main(int argc, char *ppArgv[]) {
   options.pListenAddress = "127.0.0.1";
   options.listenPort = 1111;
   options.gpYear = 2025;
+  options.autoLaunch = false;
+  options.speedFactor = 0;
 
-  while ((opt = getopt(argc, ppArgv, "l:p:y:h?")) != -1) {
+  while ((opt = getopt(argc, ppArgv, "al:p:s:y:h?")) != -1) {
     switch (opt) {
+    case 'a':
+      options.autoLaunch = true;
+      break;
     case 'p':
       options.listenPort = atoi(optarg);
       break;
     case 'l':
       options.pListenAddress = optarg;
+      break;
+    case 's':
+      options.speedFactor = atoi(optarg);
+      if (options.speedFactor < 0) {
+        options.speedFactor = 0;
+      } else if (options.speedFactor > 5) {
+        options.speedFactor = 5;
+      }
       break;
     case 'y':
       options.gpYear = atoi(optarg);

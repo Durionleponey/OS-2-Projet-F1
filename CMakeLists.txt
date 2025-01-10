@@ -21,6 +21,7 @@ if(CMAKE_HOST_SYSTEM MATCHES Linux)
   message(STATUS "Build host runs Linux")
 
   add_compile_definitions(LINUX)
+  add_compile_definitions(_GNU_SOURCE)
 
   link_libraries(ncurses)
 endif()
@@ -31,22 +32,12 @@ add_executable(genTime
         genTime.c include/grandPrix.h
         util.c include/util.h)
 
-add_executable(displayResult
-        displayResult.c include/grandPrix.h
-        csvParser.c include/csvParser.h
-        util.c include/util.h)
-
 add_executable(testCsvParser
         testCsvParser.c
         csvParser.c include/csvParser.h)
 
-add_executable(testFile
-        testFile.c include/grandPrix.h include/util.h)
-
-add_executable(testMenu
-        testMenu.c)
-
 add_executable(grandPrix
         grandPrix.c include/grandPrix.h include/util.h
+        saveFile.c include/saveFile.h
         csvParser.c include/csvParser.h
         util.c include/util.h)

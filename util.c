@@ -94,7 +94,7 @@ char *timestampToMinute(uint32_t timeMs, char *pOutput, int size) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-char *timestampToSeconds(uint32_t timeMs, char *pOutput, int size) {
+char *timestampToSecond(uint32_t timeMs, char *pOutput, int size) {
   int milli;
   int second;
 

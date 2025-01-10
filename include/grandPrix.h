@@ -5,13 +5,34 @@
 #include <stdbool.h>
 #include <errno.h>
 
+#ifdef WIN64
+#include <winsock2.h>
+#include <ncurses/curses.h>
+#endif
+
+#ifdef LINUX
+#include <ncurses.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <linux/limits.h>
+#endif
+
+#include "csvParser.h"
+
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 #define RETURN_OK 0
 #define RETURN_KO 1
 
 #define MAX_DRIVERS 20
+#define MAX_DRIVERS_Q1 MAX_DRIVERS
+#define MAX_DRIVERS_Q2 15
+#define MAX_DRIVERS_Q3 10
 #define MAX_GP 24
+
+#define MILLI_PER_MINUTE (60 * 1000)
 
 #ifdef WIN64
 #define socket_t SOCKET
@@ -22,6 +43,8 @@
 typedef int socket_t;
 #define closesocket(x) close(x)
 #define WSAGetLastError() errno
+#define O_BINARY 0
+#define O_TEXT 0
 #endif
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -65,65 +88,32 @@ typedef struct structEventRace {
   uint32_t timestamp; // time in milliseconds
 } EventRace;
 
-typedef struct structPracticeItem {
+typedef struct structRaceInfo {
   int carId;
-  uint32_t bestLapTime;
-  int bestLap;
-  uint32_t bestS1;
-  uint32_t bestS2;
-  uint32_t bestS3;
-} PracticeItem;
-
-typedef struct structPractice {
-  RaceType type;
-  PracticeItem pItems[MAX_DRIVERS];
-} Practice;
-
-typedef struct structQualificationItem {
-  int carId;
-  uint32_t bestLapTime;
-  int bestLap;
-  uint32_t bestS1;
-  uint32_t bestS2;
-  uint32_t bestS3;
-} QualificationItem;
-
-typedef struct structQualification {
-  RaceType type;
-  QualificationItem pItems[MAX_DRIVERS];
-} Qualification;
-
-typedef struct structSprintItem {
-  int carId;
-  uint32_t racingTime;
-} SprintItem;
-
-typedef struct structSprint {
-  RaceType type;
-  SprintItem pItems[MAX_DRIVERS];
-} Sprint;
-
-typedef struct structRaceItem {
-  int carId;
-  uint32_t racingTime;
   int pits;
+  uint32_t raceTime;
   uint32_t pitsTime;
-} RaceItem;
+  uint32_t bestLapTime;
+  int bestLap;
+  uint32_t bestS1;
+  uint32_t bestS2;
+  uint32_t bestS3;
+} RaceInfo;
 
 typedef struct structRace {
   RaceType type;
-  RaceItem pItems[MAX_DRIVERS];
+  RaceInfo pItems[MAX_DRIVERS];
 } Race;
 
 typedef struct structGrandPrix {
   int grandPrixId;
   bool specialGP;
   RaceType nextStep;
-  Practice pPractices[3];
-  Qualification pSprintShootout[3];
-  Sprint sprint;
-  Qualification pQualifications[3];
-  Race race;
+  Race pPractices[3];
+  Race pSprintShootout[3];
+  Race sprint;
+  Race pQualifications[3];
+  Race final;
 } GrandPrix;
 
 typedef struct structStandingsTableItem {
@@ -134,6 +124,41 @@ typedef struct structStandingsTableItem {
 typedef struct structStandingsTable {
   StandingsTableItem pItems[MAX_DRIVERS];
 } StandingsTable;
+
+typedef struct structListener {
+  struct sockaddr_in serverAddr;
+  u_short serverPort;
+  socket_t serverSocket;
+} Listener;
+
+typedef struct structClientContext {
+  struct sockaddr_in clientAddr;
+  u_short clientPort;
+  socket_t clientSocket;
+} ClientContext;
+
+typedef struct structContext {
+  CsvRow **ppCsvGrandPrix;
+  CsvRow **ppCsvDrivers;
+  StandingsTable standingsTable;
+  GrandPrix *pGrandPrix;
+  int gpHistoricHandle;
+  int currentGP;
+  int gpYear;
+  int speedFactor;
+  bool autoLaunch;
+  Listener listener;
+  WINDOW *pWindow;
+} Context;
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
+extern const int pSprintScores[];
+extern const int pGrandPrixScores[];
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
+extern int compareStandingsTableItem(const void *pA, const void *pB);
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
