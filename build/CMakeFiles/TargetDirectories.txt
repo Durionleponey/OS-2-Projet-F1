@@ -1,0 +1,5 @@
+/home/kali/Documents/OS-2-Projet-F1-main/build/CMakeFiles/genTime.dir
+/home/kali/Documents/OS-2-Projet-F1-main/build/CMakeFiles/testCsvParser.dir
+/home/kali/Documents/OS-2-Projet-F1-main/build/CMakeFiles/grandPrix.dir
+/home/kali/Documents/OS-2-Projet-F1-main/build/CMakeFiles/edit_cache.dir
+/home/kali/Documents/OS-2-Projet-F1-main/build/CMakeFiles/rebuild_cache.dir

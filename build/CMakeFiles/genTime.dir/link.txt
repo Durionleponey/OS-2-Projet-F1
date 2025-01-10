@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wuninitialized -Wreturn-type -Wstrict-prototypes -Wwrite-strings -Wwrite-strings -O3 -DNDEBUG CMakeFiles/genTime.dir/genTime.c.o CMakeFiles/genTime.dir/util.c.o -o genTime  -lncurses -lpthread

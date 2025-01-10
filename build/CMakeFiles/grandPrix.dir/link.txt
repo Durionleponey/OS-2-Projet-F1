@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wuninitialized -Wreturn-type -Wstrict-prototypes -Wwrite-strings -Wwrite-strings -O3 -DNDEBUG CMakeFiles/grandPrix.dir/grandPrix.c.o CMakeFiles/grandPrix.dir/saveFile.c.o CMakeFiles/grandPrix.dir/csvParser.c.o CMakeFiles/grandPrix.dir/util.c.o -o grandPrix  -lncurses -lpthread
