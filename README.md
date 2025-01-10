@@ -23,7 +23,7 @@
    make
    ```
 
-Pur démarrer l'applcation:
+Pour démarrer l'applcation:
 
 Ouvrir 2 terminaux
 
