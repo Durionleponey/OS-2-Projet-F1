@@ -1487,7 +1487,7 @@ int captureEvents(Context *pCtx, int choice, void *pUserData) {
       char pGrandPrixId[16];
       char pSpeedFactor[16];
 
-      sprintf(pGrandPrixId, "-c%d", leaderBoard.grandPrixId);
+      sprintf(pGrandPrixId, "-c%d", leaderBoard.grandPrixId + 1);
       ppArgs[0] = "genTime";
       ppArgs[1] = pGrandPrixId;
       ppArgs[2] = "-t";
