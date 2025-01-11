@@ -30,6 +30,13 @@ cd build
 
 OU
 
+cd build
+./grandPrix -a -f 6
+
+(L'arguement de -f est le facteur de multiplication de la vitesse)
+
+OU
+
 Ouvrir 2 terminaux
 
 ## Server side:
