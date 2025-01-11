@@ -25,6 +25,11 @@
 
 Pour démarrer l'applcation:
 
+cd build
+./grandPrix -a
+
+OU
+
 Ouvrir 2 terminaux
 
 ## Server side:
