@@ -1,8 +1,8 @@
-# Linus et MACos
+# Linux et MacOS
 
 (Le programme est déjà compilé)
 
-(RE)Compiler le programme:
+(Re)Compiler le programme:
 
 
 1. Assurez-vous que GCC ou Clang est installé :
@@ -12,7 +12,7 @@
    ```
 2. Clonez le dépôt :
    ```bash
-   git clone https://github.com/username/grandPrix.git
+   git clone https://github.com/NathanColson/grandPrix.git
    ```
 3. Configurez et compilez le projet :
    ```bash
@@ -38,7 +38,7 @@ cd build
 
 
 
- # WINDOWS
+ # (WINDOWS)
 
 
 # Installer MSys64:
