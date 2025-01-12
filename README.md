@@ -33,9 +33,9 @@ OU
 
 cd build 
 
-./grandPrix -a -f 6
+./grandPrix -a -s 6
 
-(L'arguement de -f est le facteur de multiplication de la vitesse)
+(L'arguement de -s est le 'speed factor')
 
 OU
 
