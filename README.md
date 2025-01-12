@@ -25,12 +25,14 @@
 
 Pour démarrer l'applcation:
 
-cd build
+cd build 
+
 ./grandPrix -a
 
 OU
 
-cd build
+cd build 
+
 ./grandPrix -a -f 6
 
 (L'arguement de -f est le facteur de multiplication de la vitesse)
