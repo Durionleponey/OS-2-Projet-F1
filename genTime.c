@@ -45,9 +45,12 @@ int compareEventTimestamp(const void *pLeft, const void *pRight) {
   int compare;
 
   compare = ((EventRace *)pLeft)->timestamp - ((EventRace *)pRight)->timestamp;
+  //EventRace cast: act as pLeft is a pointer to a EnventRace  acces to timestamp from pLeft structure
+  //compare witch timestand
   if (compare == 0) {
     compare = ((EventRace *)pLeft)->id - ((EventRace *)pRight)->id;
   }
+  //compare with id
   return compare;
 }
 

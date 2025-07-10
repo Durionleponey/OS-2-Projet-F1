@@ -1,0 +1,5 @@
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" -S /home/bibi/OS-2-Projet-F1 -B /home/bibi/OS-2-Projet-F1/cmake-build-debug
+-- Build host runs Linux
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/bibi/OS-2-Projet-F1/cmake-build-debug

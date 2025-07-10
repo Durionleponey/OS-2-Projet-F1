@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wuninitialized -Wreturn-type -Wstrict-prototypes -Wwrite-strings -Wwrite-strings -g CMakeFiles/testCsvParser.dir/testCsvParser.c.o CMakeFiles/testCsvParser.dir/csvParser.c.o -o testCsvParser  -lncurses -lpthread 

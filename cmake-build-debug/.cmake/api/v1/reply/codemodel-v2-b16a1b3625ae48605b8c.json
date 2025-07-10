@@ -1,0 +1,78 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.25"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "F1master",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "genTime::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-genTime-Debug-87733c73ae1b94ec6e12.json",
+					"name" : "genTime",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "grandPrix::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-grandPrix-Debug-c894635ec72f191eb468.json",
+					"name" : "grandPrix",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "testCsvParser::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-testCsvParser-Debug-bb4e82b6a3e3c3fa10f6.json",
+					"name" : "testCsvParser",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/bibi/OS-2-Projet-F1/cmake-build-debug",
+		"source" : "/home/bibi/OS-2-Projet-F1"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}
