@@ -40,7 +40,7 @@ int getRandomTime(int minTime, int maxTime) {
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
-
+//compare and 2 EventRace type
 int compareEventTimestamp(const void *pLeft, const void *pRight) {
   //void mean that type is not set != const int *a
   int compare;
