@@ -369,10 +369,18 @@ int main(int argc, char *ppArgv[]) {
   options.sleepIndex = false;
   options.verbose = false;
 
-  while ((opt = getopt(argc, ppArgv, "c:d:fl:p:s:t:vh?")) != -1) {
+  while ((opt = getopt(argc, ppArgv, "w:c:d:fl:p:s:t:vh?")) != -1) {
+    //getopt is a build in function
+
+    //when : wait for a value when no : wait for a bool
     switch (opt) {
+    case 'w':
+      printf("w selected!--> %s\n",optarg);
+      break;
     case 'c':
       options.raceNumber = atoi(optarg);
+      printf("race Number %d\n",atoi(optarg));
+      //atoi char* --> int
       break;
     case 't':
       options.raceType = stringToRaceType(optarg);
@@ -428,6 +436,9 @@ int main(int argc, char *ppArgv[]) {
 
   printf("INFO: Race number: %d\n", options.raceNumber);
   printf("INFO: Race type: %s\n", raceTypeToString(options.raceType));
+  printf("INFO: Race number of lap: %d\n", options.laps);
+
+
 
   code = genTimeCore(&options);
   if (code) {
