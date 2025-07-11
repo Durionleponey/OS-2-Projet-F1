@@ -37,6 +37,9 @@ void printHelp(void) {
 
 int getRandomTime(int minTime, int maxTime) {
   return minTime + (unsigned int)((rand() * rand())) % (maxTime - minTime + 1);
+  //rand() * rand() to incread the scop and reasign to unsigned int to avoid overflow
+  //% give a number between maxTime and minTime
+
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
@@ -56,14 +59,16 @@ int compareEventTimestamp(const void *pLeft, const void *pRight) {
 }
 
 /*--------------------------------------------------------------------------------------------------------------------*/
-
+//send bit to the socket
 int writeFully(socket_t socket, void *pBuffer, int size) {
   uint8_t *pRecvBuffer;
+  //8bit unsign integer
   int bytesWritten;
   int code;
 
   bytesWritten = 0;
   pRecvBuffer = (uint8_t *)pBuffer;
+
   while (bytesWritten < size) {
     code = send(socket, (char *)pRecvBuffer, size - bytesWritten, 0);
     if (code > 0) {
@@ -198,9 +203,14 @@ int genTimeCore(ProgramOptions *pParms) {
   }
 
   pPits = (bool *)malloc(pParms->laps * sizeof(bool));
+  //assignement of a range of memory of type bool -> number of laps * sizeof(a bool)
 
   maxEvents = cars * (5 * pParms->laps + 2);
+  //+2 start and finish ?
+
   pEvents = (EventRace *)calloc(maxEvents, sizeof(EventRace));
+  //calloc all octets set to zero
+
   if (pEvents == NULL) {
     printf("ERROR: unable to allocate %lu bytes for events\n", (u_long)(sizeof(EventRace) * maxEvents));
     return RETURN_KO;
@@ -349,11 +359,13 @@ genTimeCoreException:
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 int main(int argc, char *ppArgv[]) {
+  //number of para + [char] -> parametter
   ProgramOptions options;
   int code;
   int opt;
 
   memset(&options, 0, sizeof(options));
+  //take options pointeur and put 0 on every things
   options.sleepIndex = false;
   options.verbose = false;
 
