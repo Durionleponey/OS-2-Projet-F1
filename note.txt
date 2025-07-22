@@ -1,0 +1,13 @@
+| Format | Type attendu               | Affichage / Lecture           | Exemple               |
+| ------ | -------------------------- | ----------------------------- | --------------------- |
+| `%d`   | `int`                      | entier signé en base 10       | `printf("%d", 42);`   |
+| `%u`   | `unsigned int`             | entier non signé              | `printf("%u", 42);`   |
+| `%f`   | `float` / `double`         | nombre à virgule flottante    | `printf("%f", 3.14);` |
+| `%lf`  | `double` (spécial `scanf`) | lecture d'un `double`         | `scanf("%lf", &x);`   |
+| `%c`   | `char`                     | un caractère                  | `printf("%c", 'A');`  |
+| `%s`   | `char *`                   | chaîne de caractères (string) | `printf("%s", "yo");` |
+| `%p`   | `void *`                   | pointeur (adresse mémoire)    | `printf("%p", ptr);`  |
+| `%x`   | `unsigned int`             | hexadécimal (minuscules)      | `printf("%x", 255);`  |
+| `%X`   | `unsigned int`             | hexadécimal (majuscules)      | `printf("%X", 255);`  |
+| `%o`   | `unsigned int`             | octal                         | `printf("%o", 8);`    |
+| `%%`   | (aucun)                    | affiche un `%` littéral       | `printf("%%");`       |

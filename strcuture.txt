@@ -1,0 +1,25 @@
+Week-end F1
+├── Format Classique
+│   ├── Vendredi
+│   │   ├── Essais Libres 1 (P1)
+│   │   └── Essais Libres 2 (P2)
+│   ├── Samedi
+│   │   ├── Essais Libres 3 (P3)
+│   │   └── Qualifications
+│   │       ├── Q1 (18 min) – 20 → 15 pilotes
+│   │       ├── Q2 (15 min) – 15 → 10 pilotes
+│   │       └── Q3 (12 min) – Détermine la pole
+│   └── Dimanche
+│       └── Grand Prix (course principale)
+│           └── Points attribués (1er à 10e + meilleur tour)
+│
+└── Format Sprint
+    ├── Vendredi
+    │   ├── Essais Libres (1 seule session)
+    │   └── Qualifications Sprint (détermine la grille du Sprint)
+    ├── Samedi
+    │   ├── Sprint (~100 km)
+    │   └── Points Sprint (8 → 1 points pour les 8 premiers)
+    └── Dimanche
+        └── Grand Prix (course principale)
+            └── Points attribués (1er à 10e + meilleur tour)
