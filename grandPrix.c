@@ -28,11 +28,8 @@ const int pGrandPrixScores[] = {25, 20, 15, 10, 8, 6, 5, 3, 2, 1, 0, 0, 0, 0, 0,
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 typedef struct structProgramOptions {//to save option of the program
-  const char *pListenAddress;//end with hidden \0
-  int listenPort;
   int gpYear;
   int speedFactor;
-  bool autoLaunch;
 } ProgramOptions;
 
 typedef struct structMenuItem {
@@ -80,7 +77,6 @@ typedef struct structLeaderBoard {
 
 typedef struct structAcquireThreadCtx {
   Context *pCtx;
-  ClientContext *pClientCtx;
   CarStatus *pCarStatus;
   bool threadStillAlive;
   int returnCode;
@@ -220,6 +216,14 @@ int readConfiguration(Context *pCtx) {
   return RETURN_OK;
 }
 
+
+
+
+int captureEvents(Context *pCtx, int choice, void *pUserData) {
+  return 0;
+}
+
+
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 void freeConfiguration(Context *pCtx) {
@@ -247,153 +251,7 @@ int compareStandingsTableItem(const void *pA, const void *pB) {
   return compare;
 }
 
-/*--------------------------------------------------------------------------------------------------------------------*/
 
-int startListening(Context *pCtx, ProgramOptions *pOptions) {
-  Listener *pListener;
-  int optionValue;
-  int code;
-
-#ifdef WIN64
-  WSADATA info;
-
-  if (WSAStartup(MAKEWORD(1, 1), &info) != 0) {
-    logger(log_ERROR, "unable to initialize Windows Socket API, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-  }
-#endif
-
-  pListener = &pCtx->listener;
-  memset(&pListener->serverAddr, 0, sizeof(pListener->serverAddr));
-
-  pListener->serverAddr.sin_port = htons(pOptions->listenPort);
-  pListener->serverAddr.sin_family = AF_INET;
-  pListener->serverAddr.sin_addr.s_addr = INADDR_ANY;
-
-  pListener->serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (pListener->serverSocket == INVALID_SOCKET) {
-    logger(log_ERROR, "unable to allocate a new socket, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-  }
-
-  optionValue = 1;
-  code = setsockopt(pListener->serverSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&optionValue, sizeof(optionValue));
-  if (code == SOCKET_ERROR) {
-    logger(log_ERROR, "unable to set socket option SO_REUSEADDR, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-  }
-
-  if (pOptions->pListenAddress != NULL) {
-    pListener->serverAddr.sin_addr.s_addr = inet_addr(pOptions->pListenAddress);
-    if (pListener->serverAddr.sin_addr.s_addr == INADDR_NONE) {
-      logger(log_ERROR, "illegal listening address '%s'\n", pOptions->pListenAddress);
-      return RETURN_KO;
-    }
-  }
-
-  if (bind(pListener->serverSocket, (struct sockaddr *)&pListener->serverAddr, sizeof(pListener->serverAddr)) ==
-      SOCKET_ERROR) {
-    logger(log_ERROR, "unable to bind listening address '%s', code=%d\n", pOptions->pListenAddress, WSAGetLastError());
-    return RETURN_KO;
-  }
-
-  if (listen(pListener->serverSocket, 8) == SOCKET_ERROR) {
-    logger(log_ERROR, "unable to start listening on address '%s:%d', code=%d\n", pOptions->pListenAddress,
-           pOptions->listenPort, WSAGetLastError());
-    return RETURN_KO;
-  }
-
-  return RETURN_OK;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-void stopListening(Context *pCtx) {
-  closesocket(pCtx->listener.serverSocket);
-
-#ifdef WIN64
-  WSACleanup();
-#endif
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
-  socket_t clientSocket;
-  char pAddrString[64];
-  socklen_t addressSize;
-#ifdef WIN64
-  DWORD stringSize;
-  int code;
-#endif
-
-  while (true) {
-    addressSize = sizeof(pClientCtx->clientAddr);
-    clientSocket = accept(pListener->serverSocket, (struct sockaddr *)&pClientCtx->clientAddr, &addressSize);
-    if (clientSocket != INVALID_SOCKET) {
-      break;
-    }
-#ifdef WIN64
-    logger(log_ERROR, "unable to accept new incoming connection, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-#endif
-#ifdef LINUX
-    if (errno != EINTR) {
-      logger(log_ERROR, "unable to accept new incoming connection, errno=%d\n", errno);
-      return RETURN_KO;
-    }
-#endif
-  }
-
-#ifdef WIN64
-  stringSize = sizeof(pAddrString);
-  code = WSAAddressToString((struct sockaddr *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr), NULL,
-                            pAddrString, &stringSize);
-  if (code == 0) {
-    logger(log_INFO, "connection from %s accepted\n", pAddrString);
-  }
-#endif
-#ifdef LINUX
-  inet_ntop(AF_INET, &pClientCtx->clientAddr.sin_addr, pAddrString, sizeof(pAddrString));
-  logger(log_INFO, "connection from %s accepted\n", pAddrString);
-#endif
-
-  pClientCtx->clientSocket = clientSocket;
-
-  return RETURN_OK;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-int readFully(socket_t socket, void *pBuffer, int size) {
-  uint8_t *pRecvBuffer;
-  int bytesRead;
-  int code;
-
-  bytesRead = 0;
-  pRecvBuffer = (uint8_t *)pBuffer;
-  while (bytesRead < size) {
-    code = recv(socket, (char *)pRecvBuffer, size - bytesRead, 0);
-    if (code > 0) {
-      bytesRead += code;
-      pRecvBuffer += code;
-    } else if (code == 0) {
-      return 0;
-    } else {
-#ifdef WIN64
-      if (WSAGetLastError() == WSAECONNRESET) {
-        return 0;
-      }
-#endif
-      logger(log_ERROR, "unable to read from socket, errno=%d\n", WSAGetLastError());
-      return -1;
-    }
-  }
-
-  return bytesRead;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
 
 int readHistoric(Context *pCtx) {
   char pFileName[PATH_MAX];
@@ -1453,203 +1311,6 @@ int processEvent(AcquireThreadCtx *pThreadCtx, EventRace *pEvent) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-void *acquireData(void *pThreadArg) {
-  AcquireThreadCtx *pThreadCtx;
-  EventRace event;
-  socket_t socket;
-  int code;
-
-  pThreadCtx = (AcquireThreadCtx *)pThreadArg;
-  socket = pThreadCtx->pClientCtx->clientSocket;
-
-  while (true) {
-    code = readFully(socket, &event, sizeof(event));
-    if (code <= 0) {
-      break;
-    }
-
-    processEvent(pThreadCtx, &event);
-  }
-
-  pThreadCtx->threadStillAlive = false;
-
-  return pThreadArg;
-}
-
-/*--------------------------------------------------------------------------------------------------------------------*/
-
-int captureEvents(Context *pCtx, int choice, void *pUserData) {
-  AcquireThreadCtx acquireThreadCtx;
-  CarStatus pCarStatus[MAX_DRIVERS];
-  LeaderBoard leaderBoard;
-  GrandPrix *pGrandPrix;
-  WINDOW *pWindow;
-  char pLastGrandPrix[128];
-  const char *pMessage;
-  ClientContext clientCtx;
-  pthread_t threadId;
-  int returnCode;
-  int maxY;
-  int maxX;
-  int code;
-  int i;
-
-  assert(pCtx->currentGP >= 0 && pCtx->currentGP < MAX_GP);
-
-  pGrandPrix = &pCtx->pGrandPrix[pCtx->currentGP];
-
-  leaderBoard.grandPrixId = pCtx->currentGP;
-  leaderBoard.type = pGrandPrix->nextStep;
-  leaderBoard.pCars = pCarStatus;
-  leaderBoard.cars = MAX_DRIVERS;
-  leaderBoard.lastEventTimestamp = 0;
-  leaderBoard.raceStartTime = 0;
-  leaderBoard.pSortIndices = (int *)malloc(sizeof(int) * leaderBoard.cars);
-  for (i = 0; i < MAX_DRIVERS; i++) {
-    leaderBoard.pSortIndices[i] = i;
-  }
-
-  memset(pCarStatus, 0, sizeof(pCarStatus));
-  if (leaderBoard.type == race_Q2_GP) {
-    for (i = 0; i < MAX_DRIVERS; i++) {
-      pCarStatus[i].cardId = pGrandPrix->pQualifications[0].pItems[i].carId;
-      pCarStatus[i].active = i < 15;
-    }
-  } else if (leaderBoard.type == race_Q2_SPRINT) {
-    for (i = 0; i < MAX_DRIVERS; i++) {
-      pCarStatus[i].cardId = pGrandPrix->pSprintShootout[0].pItems[i].carId;
-      pCarStatus[i].active = i < 15;
-    }
-  } else if (leaderBoard.type == race_Q3_GP) {
-    for (i = 0; i < MAX_DRIVERS; i++) {
-      pCarStatus[i].cardId = pGrandPrix->pQualifications[1].pItems[i].carId;
-      pCarStatus[i].active = i < 10;
-    }
-  } else if (leaderBoard.type == race_Q3_SPRINT) {
-    for (i = 0; i < MAX_DRIVERS; i++) {
-      pCarStatus[i].cardId = pGrandPrix->pSprintShootout[1].pItems[i].carId;
-      pCarStatus[i].active = i < 10;
-    }
-  } else {
-    for (i = 0; i < MAX_DRIVERS; i++) {
-      pCarStatus[i].cardId = i;
-      pCarStatus[i].active = true;
-    }
-  }
-
-  pWindow = pCtx->pWindow;
-  werase(pWindow);
-
-  getmaxyx(pWindow, maxY, maxX);
-
-  pMessage = "En attente de connexion des postes S1, S2 et S3...";
-  mvwprintw(pWindow, maxY / 2, (maxX - strlen(pMessage)) / 2, "%s", pMessage);
-  sprintf(pLastGrandPrix, "La prochaine etape est: %s - %s", pCtx->ppCsvGrandPrix[pCtx->currentGP]->ppFields[0],
-          raceTypeToString(leaderBoard.type));
-  mvwprintw(pWindow, maxY / 2 - 1, (maxX - strlen(pLastGrandPrix)) / 2, "%s", pLastGrandPrix);
-  wrefresh(pWindow);
-
-#ifdef LINUX
-  if (pCtx->autoLaunch) {
-    sleep(5);
-
-    code = fork();
-    if (code == -1) {
-      logger(log_ERROR, "unable to create a new process, errno=%d\n", errno);
-      returnCode = RETURN_KO;
-      goto captureEventsExit;
-    }
-    if (code == 0) {
-      const char *ppArgs[12];
-      char pGrandPrixId[16];
-      char pSpeedFactor[16];
-
-      sprintf(pGrandPrixId, "-c%d", leaderBoard.grandPrixId + 1);
-      ppArgs[0] = "genTime";
-      ppArgs[1] = pGrandPrixId;
-      ppArgs[2] = "-t";
-      ppArgs[3] = raceTypeToString(leaderBoard.type);
-      ppArgs[4] = "-s127.0.0.1";
-      ppArgs[5] = "-p1111";
-      ppArgs[6] = "-l";
-      ppArgs[7] = pCtx->ppCsvGrandPrix[pCtx->currentGP]->ppFields[leaderBoard.type == race_SPRINT ? 4 : 2];
-      if (pCtx->speedFactor > 0) {
-        sprintf(pSpeedFactor, "-%.*s", pCtx->speedFactor, "ffffff");
-        ppArgs[8] = pSpeedFactor;
-        ppArgs[9] = NULL;
-      } else {
-        ppArgs[8] = NULL;
-      }
-
-      code = execv("genTime", (char *const *)ppArgs);
-      if (code) {
-        logger(log_ERROR, "unable to launch executable 'gentime', errno=%d\n", errno);
-      }
-      exit(code);
-    }
-    logger(log_INFO, "a new process (pid=%d) will simulate the race\n", code);
-  }
-#endif
-
-  code = acceptConnection(&pCtx->listener, &clientCtx);
-  if (code) {
-    returnCode = code;
-    goto captureEventsExit;
-  }
-
-  wclear(pWindow);
-  wrefresh(pWindow);
-
-  acquireThreadCtx.pCtx = pCtx;
-  acquireThreadCtx.pClientCtx = &clientCtx;
-  acquireThreadCtx.pCarStatus = pCarStatus;
-  acquireThreadCtx.threadStillAlive = true;
-  code = pthread_create(&threadId, NULL, acquireData, &acquireThreadCtx);
-  if (code) {
-    logger(log_ERROR, "unable to create new thread to capture data, code=%d\n", errno);
-    returnCode = code;
-    goto captureEventsExit;
-  }
-
-  while (acquireThreadCtx.threadStillAlive) {
-    sleep(1);
-    displayLeaderBoard(pCtx, pWindow, &leaderBoard);
-  }
-  displayLeaderBoard(pCtx, pWindow, &leaderBoard);
-
-  code = pthread_join(threadId, NULL);
-  if (code) {
-    logger(log_ERROR, "unable to join acquisition thread, code=%d\n", errno);
-    returnCode = code;
-    goto captureEventsExit;
-  }
-
-  closesocket(clientCtx.clientSocket);
-
-  code = fillHistoric(pCtx, &leaderBoard);
-  if (code) {
-    logger(log_ERROR, "unable to fill historic race, code=%d\n", code);
-    returnCode = code;
-    goto captureEventsExit;
-  }
-
-  code = saveHistoric(pCtx);
-  if (code) {
-    return code;
-  }
-
-  code = saveGrandPrixToFile(pCtx, pCtx->currentGP);
-  if (code) {
-    return code;
-  }
-
-  returnCode = RETURN_OK;
-
-captureEventsExit:
-  free((void *)leaderBoard.pSortIndices);
-
-  return returnCode;
-}
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
@@ -1663,7 +1324,6 @@ int grandPrixCore(ProgramOptions *pOptions) {
     return code;
   }
   ctx.speedFactor = pOptions->speedFactor;
-  ctx.autoLaunch = pOptions->autoLaunch;
   ctx.gpYear = pOptions->gpYear;
 
   code = readHistoric(&ctx);
@@ -1671,10 +1331,8 @@ int grandPrixCore(ProgramOptions *pOptions) {
     return code;
   }
 
-  code = startListening(&ctx, pOptions);
-  if (code) {
-    return code;
-  }
+  //code = startListening(&ctx, pOptions);
+
 
   initscr();
   start_color();
@@ -1698,7 +1356,7 @@ int grandPrixCore(ProgramOptions *pOptions) {
   delwin(pWindow);
   endwin();
 
-  stopListening(&ctx);
+  //stopListening(&ctx);
 
   freeHistoric(&ctx);
   freeConfiguration(&ctx);
@@ -1714,23 +1372,11 @@ int main(int argc, char *ppArgv[]) {
   int opt;
 
   memset(&options, 0, sizeof(options));
-  options.pListenAddress = "127.0.0.1";
-  options.listenPort = 1111;
   options.gpYear = 2025;
-  options.autoLaunch = false;
   options.speedFactor = 0;
 
   while ((opt = getopt(argc, ppArgv, "al:p:s:y:h?")) != -1) {
     switch (opt) {
-    case 'a':
-      options.autoLaunch = true;
-      break;
-    case 'p':
-      options.listenPort = atoi(optarg);
-      break;
-    case 'l':
-      options.pListenAddress = optarg;
-      break;
     case 's':
       options.speedFactor = atoi(optarg);
       if (options.speedFactor < 0) {

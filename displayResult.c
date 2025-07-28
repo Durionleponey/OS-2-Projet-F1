@@ -28,22 +28,7 @@
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-typedef struct structProgramOptions {
-  const char *pListenAddress;
-  int listenPort;
-} ProgramOptions;
 
-typedef struct structListener {
-  struct sockaddr_in serverAddr;
-  u_short serverPort;
-  socket_t serverSocket;
-} Listener;
-
-typedef struct structClientContext {
-  struct sockaddr_in clientAddr;
-  u_short clientPort;
-  socket_t clientSocket;
-} ClientContext;
 
 typedef struct structCarStatus {
   char pName[32];
@@ -138,80 +123,8 @@ int startListening(ProgramOptions *pOptions, Listener *pListener) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-int acceptConnection(Listener *pListener, ClientContext *pClientCtx) {
-  socket_t clientSocket;
-  char pAddrString[64];
-  socklen_t addressSize;
-#ifdef WIN64
-  DWORD stringSize;
-  int code;
-#endif
-
-  while (true) {
-    addressSize = sizeof(pClientCtx->clientAddr);
-    clientSocket = accept(pListener->serverSocket, (struct sockaddr *)&pClientCtx->clientAddr, &addressSize);
-    if (clientSocket != INVALID_SOCKET) {
-      break;
-    }
-#ifdef WIN64
-    printf("ERROR: unable to accept new incoming connection, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-#endif
-#ifdef LINUX
-    if (errno != EINTR) {
-      printf("ERROR: unable to accept new incoming connection, errno=%d\n", errno);
-      return RETURN_KO;
-    }
-#endif
-  }
-
-#ifdef WIN64
-  stringSize = sizeof(pAddrString);
-  code = WSAAddressToString((struct sockaddr *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr), NULL,
-                            pAddrString, &stringSize);
-  if (code == 0) {
-    printf("INFO: connection from %s accepted\n", pAddrString);
-  }
-#endif
-#ifdef LINUX
-  inet_ntop(AF_INET, &pClientCtx->clientAddr.sin_addr, pAddrString, sizeof(pAddrString));
-//  printf("INFO: connection from %s accepted\n", pAddrString);
-#endif
-
-  pClientCtx->clientSocket = clientSocket;
-
-  return RETURN_OK;
-}
 
 /*--------------------------------------------------------------------------------------------------------------------*/
-
-int readFully(socket_t socket, void *pBuffer, int size) {
-  uint8_t *pRecvBuffer;
-  int bytesRead;
-  int code;
-
-  bytesRead = 0;
-  pRecvBuffer = (uint8_t *)pBuffer;
-  while (bytesRead < size) {
-    code = recv(socket, (char *)pRecvBuffer, size - bytesRead, 0);
-    if (code > 0) {
-      bytesRead += code;
-      pRecvBuffer += code;
-    } else if (code == 0) {
-      return 0;
-    } else {
-#ifdef WIN64
-      if (WSAGetLastError() == WSAECONNRESET) {
-        return 0;
-      }
-#endif
-      printf("ERROR: unable to read from socket, errno=%d\n", WSAGetLastError());
-      return -1;
-    }
-  }
-
-  return bytesRead;
-}
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 

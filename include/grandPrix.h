@@ -125,17 +125,6 @@ typedef struct structStandingsTable {
   StandingsTableItem pItems[MAX_DRIVERS];
 } StandingsTable;
 
-typedef struct structListener {
-  struct sockaddr_in serverAddr;
-  u_short serverPort;
-  socket_t serverSocket;
-} Listener;
-
-typedef struct structClientContext {
-  struct sockaddr_in clientAddr;
-  u_short clientPort;
-  socket_t clientSocket;
-} ClientContext;
 
 typedef struct structContext {
   CsvRow **ppCsvGrandPrix;
@@ -147,7 +136,6 @@ typedef struct structContext {
   int gpYear;
   int speedFactor;
   bool autoLaunch;
-  Listener listener;
   WINDOW *pWindow;
 } Context;
 

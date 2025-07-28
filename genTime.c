@@ -89,69 +89,12 @@ int writeFully(socket_t socket, void *pBuffer, int size) {
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-int sendEvent(ClientContext *pClientCtx, EventRace *pEvent) {
-  int code;
 
-  code = writeFully(pClientCtx->clientSocket, pEvent, sizeof(*pEvent));
-  if (code != sizeof(*pEvent)) {
-    return RETURN_KO;
-  }
-
-  return RETURN_OK;
-}
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-int connectServer(ProgramOptions *pOptions, ClientContext *pClientCtx) {
-  int code;
-
-  pClientCtx->clientSocket = INVALID_SOCKET;
-
-#ifdef WIN64
-  WSADATA info;
-
-  if (WSAStartup(MAKEWORD(2, 2), &info) != 0) {
-    printf("ERROR: unable to initialize Windows Socket API, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-  }
-#endif
-
-  pClientCtx->clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (pClientCtx->clientSocket == INVALID_SOCKET) {
-    printf("ERROR: unable to allocate a new socket, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-  }
-
-  pClientCtx->clientAddr.sin_family = AF_INET;
-  pClientCtx->clientAddr.sin_port = htons(pOptions->serverPort);
-  pClientCtx->clientAddr.sin_addr.s_addr = inet_addr(pOptions->pServerAddress);
-  if (pClientCtx->clientAddr.sin_addr.s_addr == INADDR_NONE) {
-    printf("ERROR: illegal listening address '%s'\n", pOptions->pServerAddress);
-    return RETURN_KO;
-  }
-
-  code = connect(pClientCtx->clientSocket, (struct sockaddr *)&pClientCtx->clientAddr, sizeof(pClientCtx->clientAddr));
-  if (code == SOCKET_ERROR) {
-    printf("ERROR; unable to connect to server, code=%d\n", WSAGetLastError());
-    return RETURN_KO;
-  }
-
-  return RETURN_OK;
-}
-
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-int disconnectServer(ClientContext *pClientCtx) {
-  if (pClientCtx->clientSocket != INVALID_SOCKET) {
-    closesocket(pClientCtx->clientSocket);
-  }
-
-#ifdef WIN64
-  WSACleanup();
-#endif
-
-  return RETURN_OK;
-}
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
@@ -168,7 +111,6 @@ int disconnectServer(ClientContext *pClientCtx) {
 // } EventRace;
 
 int genTimeCore(ProgramOptions *pParms) {
-  ClientContext clientCtx;
   uint32_t maxRaceTime;
   //non sign int
   uint32_t timestamp;
@@ -411,11 +353,7 @@ int genTimeCore(ProgramOptions *pParms) {
     }
   }
 
-  code = connectServer(pParms, &clientCtx);
-  if (code) {
-    returnCode = code;
-    goto genTimeCoreException;
-  }
+
 
   sleep = 0;
   pEvent = pEvents;
@@ -425,7 +363,6 @@ int genTimeCore(ProgramOptions *pParms) {
       sleep = pEvent->timestamp;
     }
 
-    code = sendEvent(&clientCtx, pEvent);
     if (code) {
       printf("ERROR: unable to send event %d\n", i);
       break;
@@ -436,7 +373,6 @@ int genTimeCore(ProgramOptions *pParms) {
   returnCode = RETURN_OK;
 
 genTimeCoreException:
-  disconnectServer(&clientCtx);
 
   free((void *)pEvents);
 
