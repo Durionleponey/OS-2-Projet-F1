@@ -1,0 +1,25 @@
+GrandPrix,Circuit,Laps,Special,SprintLaps
+Bahrain GP,Bahrain International Circuit,57,False,
+Saudi Arabian GP,Jeddah Corniche Circuit,50,False,
+Australian GP,Albert Park Circuit,58,False,
+Japanese GP,Suzuka,53,False,
+Chinese GP,Shanghai International Circuit,56,False,
+Miami GP,Miami International Autodrome,57,False,
+Emilia-Romagna GP,Autodromo Enzo e Dino Ferrari,63,True,17
+Monaco GP,Circuit de Monaco,78,False,
+Canadian GP,Circuit Gilles Villeneuve,70,False,
+Spanish GP,Circuit de Barcelona-Catalunya,66,False,
+Austrian GP,Red Bull Ring,71,True,23
+British GP,Silverstone,52,False,
+Hungarian GP,Hungaroring,70,False,
+Belgian GP,Spa-Francorchamps,44,True,15
+Dutch GP,Zandvoort,72,False,
+Italian GP,Monza,53,False,
+Azerbaijan GP,Baku City Circuit,51,True,17
+Singapore GP,Marina Bay,62,False,
+United States GP,Circuit of the Americas,56,True,19
+Mexico GP,Autodromo Hermanos Rodríguez,71,False,
+São Paulo GP,Interlagos,71,True,24
+Las Vegas GP,Las Vegas Strip Circuit,50,False,
+Qatar GP,Losail International Circuit,57,False,
+Abu Dhabi GP,Yas Marina Circuit,58,False,

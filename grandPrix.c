@@ -27,8 +27,8 @@ const int pGrandPrixScores[] = {25, 20, 15, 10, 8, 6, 5, 3, 2, 1, 0, 0, 0, 0, 0,
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
-typedef struct structProgramOptions {
-  const char *pListenAddress;
+typedef struct structProgramOptions {//to save option of the program
+  const char *pListenAddress;//end with hidden \0
   int listenPort;
   int gpYear;
   int speedFactor;
@@ -37,10 +37,10 @@ typedef struct structProgramOptions {
 
 typedef struct structMenuItem {
   const char *pItem;
-  int (*pMenuAction)(Context *pCtx, int choice, void *pUserData);
+  int (*pMenuAction)(Context *pCtx, int choice, void *pUserData);//first () !!pMenuAction is a pointer to a function who return a int
 } MenuItem;
 
-typedef struct structDisplayMenuContext {
+typedef struct structDisplayMenuContext {// ??
 } DisplayMenuContext;
 
 typedef struct structCarStatus {
@@ -93,19 +93,32 @@ int displayListDrivers(Context *pCtx, int choice, void *pUserData);
 int displayStandings(Context *pCtx, int choice, void *pUserData);
 int captureEvents(Context *pCtx, int choice, void *pUserData);
 int displayCompletedGPMenu(Context *pCtx, int choice, void *pUserData);
+int displayPilotChange(Context *pCtx, int choice, void *pUserData);
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
 // clang-format off
-static MenuItem pMainMenu[] = {
+const static MenuItem pMainMenu[] = {
   { "Afficher liste des Grand Prix", displayListGPs },
   { "Afficher liste des pilotes", displayListDrivers },
   { "Afficher des resultats de courses terminees", displayCompletedGPMenu },
   { "Afficher le classement general", displayStandings },
   { "Lancer la capture de l'etape suivante", captureEvents },
-  { "Quitter le programme", NULL },
+  {"Changer les pilotes", displayPilotChange},
+{ "Quitter le programme", NULL },
   { NULL, NULL }
 };
+
+
+static MenuItem pPilotChangeMenu[] = {
+  { "Utiliser des pilotes de Crash Bandicoot", NULL },
+  { "Utiliser des pilotes de la brigade des gendarme de Saint-Tropez", NULL },
+  { "Réinitialiser les pilotes originaux", NULL },
+  { NULL, NULL }
+};
+
+
+
 
 static MenuItem pGPMenu[] = {
   { "Afficher les essais 1", NULL },
@@ -1134,6 +1147,67 @@ displayAllGPMenuExit:
 
 /*--------------------------------------------------------------------------------------------------------------------*/
 
+
+int displayPilotChange(Context *pCtx, int choice, void *pUserData) {
+  int selected;
+
+  while (true) {
+    selected = displayMenu(pCtx, pPilotChangeMenu, true, 0, NULL);
+    if (selected == -1) {
+      break;
+    }
+
+    switch (selected) {
+
+
+    case 0: {
+
+      CsvParser *pCsvParser = csvParserCreate("Drivers_Crash.csv", NULL, false);
+      if (pCsvParser == NULL) {
+        logger(log_ERROR, "impossible de charger les pilotes Crash Bandicoot\n");
+        break;
+      }
+
+      CsvRow **ppCsvRowArray = malloc(sizeof(CsvRow *) * MAX_DRIVERS);
+      if (ppCsvRowArray == NULL) {
+        logger(log_FATAL, "allocation échouée pour les pilotes Crash Bandicoot\n");
+        break;
+      }
+
+      for (int i = 0; i < MAX_DRIVERS; i++) {
+        CsvRow *pCsvRow = csvParserGetRow(pCsvParser);
+        if (pCsvRow == NULL) {
+          logger(log_ERROR, "le fichier Crash Bandicoot contient moins de %d lignes\n", MAX_DRIVERS);
+          break;
+        }
+        ppCsvRowArray[i] = pCsvRow;
+      }
+
+      csvParserDestroy(pCsvParser);
+
+      free((void *)pCtx->ppCsvDrivers); // libère l'ancien tableau
+      pCtx->ppCsvDrivers = ppCsvRowArray;
+
+      break;
+    }
+      break;
+    case 1:
+      // TODO: charger les pilotes Gendarmes de St-Tropez
+      break;
+    case 2:
+      // TODO: réinitialiser les pilotes originaux
+      break;
+    }
+  }
+
+  return RETURN_OK;
+}
+
+
+
+
+/*--------------------------------------------------------------------------------------------------------------------*/
+
 #ifdef WIN64
 int compareCarStatus(void *pUserData, const void *pLeft, const void *pRight) {
 #else
@@ -1616,7 +1690,7 @@ int grandPrixCore(ProgramOptions *pOptions) {
   code = 0;
   while (true) {
     code = displayMenu(&ctx, pMainMenu, false, code, NULL);
-    if (code == 5) {
+    if (code == 6) {
       break;
     }
   }
